@@ -472,36 +472,47 @@ Status ModularFrameEncoder::Init(const FrameHeader& frame_header,
 
   size_t num_streams =
       ModularStreamId::Num(frame_dim_, frame_header.passes.num_passes);
+
+  // Progressive lossless only benefits from levels 2 and higher
+  // Lower levels of faster decoding can outperform higher tiers
+  // depending on the PC
+  if (cparams_.responsive == 1 && cparams_.IsLossless() && cparams_.decoding_speed_tier == 1) {
+    cparams_.decoding_speed_tier = 2;
+  }
+  if (cparams_.responsive == 1 && cparams_.IsLossless()) {
+      //RCT selection seems bugged with Squeeze, YCoCg works well.
+      if (cparams_.colorspace < 0) {
+          cparams_.colorspace = 6;
+      }
+  }
+
   if (cparams_.ModularPartIsLossless()) {
     switch (cparams_.decoding_speed_tier) {
       case 0:
         break;
-      case 1:
-        cparams_.options.wp_tree_mode = ModularOptions::TreeMode::kWPOnly;
+      case 1: // No Weighted predictor
+        cparams_.options.wp_tree_mode = ModularOptions::TreeMode::kNoWP;
         break;
-      case 2: {
+      case 2: { // No Weighted predictor and Group size 0 defined in enc_frame.cc
+        cparams_.options.wp_tree_mode = ModularOptions::TreeMode::kNoWP;
+        break;
+      }
+      case 3: { // Gradient only, Group size 0, and Fast MA tree
         cparams_.options.wp_tree_mode = ModularOptions::TreeMode::kGradientOnly;
         cparams_.options.predictor = Predictor::Gradient;
         break;
       }
-      case 3: {  // LZ77, no Gradient.
-        cparams_.options.nb_repeats = 0;
+      default: { // Gradient only, Group size 0, and No MA tree
+        cparams_.options.wp_tree_mode = ModularOptions::TreeMode::kGradientOnly;
         cparams_.options.predictor = Predictor::Gradient;
-        break;
-      }
-      default: {  // LZ77, no predictor.
         cparams_.options.nb_repeats = 0;
-        cparams_.options.predictor = Predictor::Zero;
+          // Disabling MA Trees sometimes doesn't increase decode speed
+          // depending on PC
         break;
       }
     }
   }
-  if (cparams_.decoding_speed_tier >= 1 && cparams_.responsive &&
-      cparams_.ModularPartIsLossless()) {
-    cparams_.options.tree_kind =
-        ModularOptions::TreeKind::kTrivialTreeNoPredictor;
-    cparams_.options.nb_repeats = 0;
-  }
+
   for (size_t i = 0; i < num_streams; ++i) {
     stream_images_.emplace_back(memory_manager_);
   }
@@ -608,7 +619,9 @@ Status ModularFrameEncoder::Init(const FrameHeader& frame_header,
       // multipliers in lossy mode.
       cparams_.options.predictor = Predictor::Variable;
     } else if (cparams_.responsive || cparams_.lossy_palette) {
-      // zero predictor for Squeeze residues and lossy palette
+    // zero predictor for Squeeze residues and lossy palette indices
+    // TODO: Try adding 'Squeezed' predictor set, with the most
+    // common predictors used by Variable in squeezed images, including none.
       cparams_.options.predictor = Predictor::Zero;
     } else if (!cparams_.IsLossless()) {
       // If not responsive and lossy. TODO(veluca): use near_lossless instead?
@@ -623,7 +636,7 @@ Status ModularFrameEncoder::Init(const FrameHeader& frame_header,
       // just gradient predictor in thunder mode
       cparams_.options.predictor = Predictor::Gradient;
     }
-  } else {
+   } else {
     if (cparams_.lossy_palette) cparams_.options.predictor = Predictor::Zero;
   }
   if (!cparams_.ModularPartIsLossless()) {
@@ -1073,9 +1086,8 @@ Status ModularFrameEncoder::ComputeTree(ThreadPool* pool) {
       const Image& image = stream_images_[stream_id];
       const ModularOptions& options = stream_options_[stream_id];
       for (uint32_t i = image.nb_meta_channels; i < image.channel.size(); i++) {
-        if (i >= image.nb_meta_channels &&
-            (image.channel[i].w > options.max_chan_size ||
-             image.channel[i].h > options.max_chan_size)) {
+        if (image.channel[i].w > options.max_chan_size ||
+            image.channel[i].h > options.max_chan_size) {
           continue;
         }
         if (stream_id > 0 && gi_channel_[stream_id].empty()) continue;
@@ -1092,7 +1104,7 @@ Status ModularFrameEncoder::ComputeTree(ThreadPool* pool) {
           StaticPropRange range;
           range[0] = {{i, i + 1}};
           range[1] = {{stream_id, stream_id + 1}};
-          multiplier_info.push_back({range, static_cast<uint32_t>(q)});
+          multiplier_info.push_back({range, q});
         } else {
           // Previous channel in the same group had the same quantization
           // factor. Don't provide two different ranges, as that creates
@@ -1148,61 +1160,29 @@ Status ModularFrameEncoder::ComputeTree(ThreadPool* pool) {
     const auto process_chunk = [&](const uint32_t chunk,
                                    size_t /* thread */) -> Status {
       // TODO(veluca): parallelize more.
-      size_t total_pixels = 0;
       uint32_t start = useful_splits[chunk];
       uint32_t stop = useful_splits[chunk + 1];
       while (start < stop && stream_images_[start].empty()) ++start;
       while (start < stop && stream_images_[stop - 1].empty()) --stop;
-      if (stream_options_[start].tree_kind !=
+
+      if (stream_options_[start].tree_kind ==
           ModularOptions::TreeKind::kLearn) {
+        JXL_ASSIGN_OR_RETURN(
+            trees[chunk],
+            LearnTree(stream_images_.data(), stream_options_.data(), start,
+                      stop, multiplier_info));
+      } else {
+        size_t total_pixels = 0;
         for (size_t i = start; i < stop; i++) {
           for (const Channel& ch : stream_images_[i].channel) {
             total_pixels += ch.w * ch.h;
           }
         }
+        total_pixels = std::max<size_t>(total_pixels, 1);
+
         trees[chunk] = PredefinedTree(stream_options_[start].tree_kind,
                                       total_pixels, 8, 0);
-        return true;
       }
-      TreeSamples tree_samples;
-      JXL_RETURN_IF_ERROR(
-          tree_samples.SetPredictor(stream_options_[start].predictor,
-                                    stream_options_[start].wp_tree_mode));
-      JXL_RETURN_IF_ERROR(tree_samples.SetProperties(
-          stream_options_[start].splitting_heuristics_properties,
-          stream_options_[start].wp_tree_mode));
-      uint32_t max_c = 0;
-      std::vector<pixel_type> pixel_samples;
-      std::vector<pixel_type> diff_samples;
-      std::vector<uint32_t> group_pixel_count;
-      std::vector<uint32_t> channel_pixel_count;
-      for (uint32_t i = start; i < stop; i++) {
-        max_c = std::max<uint32_t>(stream_images_[i].channel.size(), max_c);
-        CollectPixelSamples(stream_images_[i], stream_options_[i], i,
-                            group_pixel_count, channel_pixel_count,
-                            pixel_samples, diff_samples);
-      }
-      StaticPropRange range;
-      range[0] = {{0, max_c}};
-      range[1] = {{start, stop}};
-
-      tree_samples.PreQuantizeProperties(
-          range, multiplier_info, group_pixel_count, channel_pixel_count,
-          pixel_samples, diff_samples,
-          stream_options_[start].max_property_values);
-      for (size_t i = start; i < stop; i++) {
-        JXL_RETURN_IF_ERROR(
-            ModularGenericCompress(stream_images_[i], stream_options_[i],
-                                   /*writer=*/nullptr,
-                                   /*aux_out=*/nullptr, LayerType::Header, i,
-                                   &tree_samples, &total_pixels));
-      }
-
-      // TODO(veluca): parallelize more.
-      JXL_ASSIGN_OR_RETURN(
-          trees[chunk],
-          LearnTree(std::move(tree_samples), total_pixels,
-                    stream_options_[start], multiplier_info, range));
       return true;
     };
     JXL_RETURN_IF_ERROR(RunOnPool(pool, 0, useful_splits.size() - 1,
@@ -1258,16 +1238,11 @@ Status ModularFrameEncoder::ComputeTokens(ThreadPool* pool) {
   image_widths_.resize(num_streams);
   const auto process_stream = [&](const uint32_t stream_id,
                                   size_t /* thread */) -> Status {
-    AuxOut my_aux_out;
     tokens_[stream_id].clear();
-    JXL_RETURN_IF_ERROR(ModularGenericCompress(
-        stream_images_[stream_id], stream_options_[stream_id],
-        /*writer=*/nullptr, &my_aux_out, LayerType::Header, stream_id,
-        /*tree_samples=*/nullptr,
-        /*total_pixels=*/nullptr,
-        /*tree=*/&tree_, /*header=*/&stream_headers_[stream_id],
-        /*tokens=*/&tokens_[stream_id],
-        /*widths=*/&image_widths_[stream_id]));
+    JXL_RETURN_IF_ERROR(
+        ModularCompress(stream_images_[stream_id], stream_options_[stream_id],
+                        stream_id, tree_, stream_headers_[stream_id],
+                        tokens_[stream_id], &image_widths_[stream_id]));
     return true;
   };
   JXL_RETURN_IF_ERROR(RunOnPool(pool, 0, num_streams, ThreadPool::NoInit,
@@ -1298,15 +1273,12 @@ Status ModularFrameEncoder::EncodeGlobalInfo(bool streaming_mode,
       HistogramParams::ForModular(cparams_, extra_dc_precision, streaming_mode);
   {
     EntropyEncodingData tree_code;
-    std::vector<uint8_t> tree_context_map;
     JXL_ASSIGN_OR_RETURN(
-        size_t cost,
-        BuildAndEncodeHistograms(memory_manager, params, kNumTreeContexts,
-                                 tree_tokens_, &tree_code, &tree_context_map,
-                                 writer, LayerType::ModularTree, aux_out));
+        size_t cost, BuildAndEncodeHistograms(
+                         memory_manager, params, kNumTreeContexts, tree_tokens_,
+                         &tree_code, writer, LayerType::ModularTree, aux_out));
     (void)cost;
-    JXL_RETURN_IF_ERROR(WriteTokens(tree_tokens_[0], tree_code,
-                                    tree_context_map, 0, writer,
+    JXL_RETURN_IF_ERROR(WriteTokens(tree_tokens_[0], tree_code, 0, writer,
                                     LayerType::ModularTree, aux_out));
   }
   params.streaming_mode = streaming_mode;
@@ -1314,10 +1286,9 @@ Status ModularFrameEncoder::EncodeGlobalInfo(bool streaming_mode,
   params.image_widths = image_widths_;
   // Write histograms.
   JXL_ASSIGN_OR_RETURN(
-      size_t cost,
-      BuildAndEncodeHistograms(memory_manager, params, (tree_.size() + 1) / 2,
-                               tokens_, &code_, &context_map_, writer,
-                               LayerType::ModularGlobal, aux_out));
+      size_t cost, BuildAndEncodeHistograms(
+                       memory_manager, params, (tree_.size() + 1) / 2, tokens_,
+                       &code_, writer, LayerType::ModularGlobal, aux_out));
   (void)cost;
   return true;
 }
@@ -1332,13 +1303,13 @@ Status ModularFrameEncoder::EncodeStream(BitWriter* writer, AuxOut* aux_out,
   }
   if (tokens_.empty()) {
     JXL_RETURN_IF_ERROR(ModularGenericCompress(
-        stream_images_[stream_id], stream_options_[stream_id], writer, aux_out,
+        stream_images_[stream_id], stream_options_[stream_id], *writer, aux_out,
         layer, stream_id));
   } else {
     JXL_RETURN_IF_ERROR(
         Bundle::Write(stream_headers_[stream_id], writer, layer, aux_out));
-    JXL_RETURN_IF_ERROR(WriteTokens(tokens_[stream_id], code_, context_map_, 0,
-                                    writer, layer, aux_out));
+    JXL_RETURN_IF_ERROR(
+        WriteTokens(tokens_[stream_id], code_, 0, writer, layer, aux_out));
   }
   return true;
 }
@@ -1425,7 +1396,7 @@ Status ModularFrameEncoder::PrepareStreamParams(const Rect& rect,
         cparams.speed_tier < SpeedTier::kCheetah) {
       int max_bitdepth = 0, maxval = 0;  // don't care about that here
       float channel_color_percent = 0;
-      if (!(cparams.responsive && cparams.decoding_speed_tier >= 1)) {
+      if (!(cparams.responsive && (cparams.decoding_speed_tier >= 1 || cparams.IsLossless()))) {
         channel_color_percent = cparams.channel_colors_percent;
       }
       try_palettes(gi, max_bitdepth, maxval, cparams, channel_color_percent);
@@ -1442,7 +1413,7 @@ Status ModularFrameEncoder::PrepareStreamParams(const Rect& rect,
     Transform sg(TransformId::kRCT);
     sg.begin_c = gi.nb_meta_channels;
     size_t nb_rcts_to_try = 0;
-    switch (cparams.speed_tier) {
+      switch (cparams.speed_tier) {
       case SpeedTier::kLightning:
       case SpeedTier::kThunder:
       case SpeedTier::kFalcon:
@@ -1792,7 +1763,7 @@ Status ModularFrameEncoder::EncodeQuantTable(
     }
   }
   ModularOptions cfopts;
-  JXL_RETURN_IF_ERROR(ModularGenericCompress(image, cfopts, writer));
+  JXL_RETURN_IF_ERROR(ModularGenericCompress(image, cfopts, *writer));
   return true;
 }
 
