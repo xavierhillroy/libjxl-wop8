@@ -1,0 +1,18 @@
+{
+  "dataset": "Kodak_Lossless_True_Color_Image_Suite",
+  "best_weights": [
+    8,
+    0,
+    5,
+    13,
+    10,
+    8,
+    4,
+    6
+  ],
+  "total_compressed_size": 10313744,
+  "average_mae": 0.0,
+  "compressed_count": 24,
+  "test_count": 22,
+  "train_count": 2
+}

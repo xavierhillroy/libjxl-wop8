@@ -8,7 +8,7 @@ import shutil
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
 from config import TRAIN_DIR, TEST_DIR
 
-def partition_dataset(source_files, train_dir, test_dir, train_ratio=0.1, seed=42):
+def partition_dataset(source_files, train_dir, test_dir, train_ratio=0.1, max_train_images=10, seed=42):
     """
     Randomly partition images into training and testing sets.
     
@@ -17,6 +17,7 @@ def partition_dataset(source_files, train_dir, test_dir, train_ratio=0.1, seed=4
         train_dir (str): Directory to store training images
         test_dir (str): Directory to store testing images
         train_ratio (float): Ratio of images to use for training (0.0-1.0)
+        max_train_images (int): Maximum number of training images to use
         seed (int): Random seed for reproducibility
         
     Returns:
@@ -40,8 +41,9 @@ def partition_dataset(source_files, train_dir, test_dir, train_ratio=0.1, seed=4
     shuffled_files = source_files.copy()
     random.shuffle(shuffled_files)
     
-    # Calculate split
-    train_count = max(1, int(len(shuffled_files) * train_ratio))
+    # Calculate split using minimum of ratio and fixed number
+    ratio_count = max(1, int(len(shuffled_files) * train_ratio))
+    train_count = min(ratio_count, max_train_images)
     
     # Split into training and testing sets
     train_files = shuffled_files[:train_count]

@@ -20,7 +20,7 @@ class BaselineCompression:
         self.djxl_path = os.path.join(BUILD_DIR, 'tools', 'djxl')
         self.context_manager = ContextFileManager(CONTEXT_PREDICT_PATH, BUILD_DIR)
     
-    def setup(self):
+    def setup(self, clean=False):
         """Set up the environment for baseline compression"""
         # Ensure original and W-OP8 files exist
         self.context_manager.ensure_versions_exist()
@@ -30,7 +30,7 @@ class BaselineCompression:
             return False
         
         # Rebuild library with original weights
-        return self.context_manager.rebuild_library()
+        return self.context_manager.rebuild_library(clean=clean)
     
     def calculate_mae(self, img1_path, img2_path):
         """

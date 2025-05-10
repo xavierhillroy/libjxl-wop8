@@ -267,14 +267,14 @@ struct State {
 // Modified: Updated predictor weights with values optimized for medical images
 inline void PredictorMode(int i, Header *header) {
     // Set Optimized Weights - currently optimized for the kodak dataset
-    const uint32_t w0 = 0x1;  // Original predictor weights
-    const uint32_t w1 = 0x1;
-    const uint32_t w2 = 0x1;
-    const uint32_t w3 = 0x8;
-    const uint32_t w4 = 0xf;  // Adaptive Median weight
-    const uint32_t w5 = 0x0;  // Enhanced Adaptive Median weight
-    const uint32_t w6 = 0xb;  // Paeth weight
-    const uint32_t w7 = 0x3;  // GAP weight
+const uint32_t w0 = 0x8;  // Original predictor weights
+const uint32_t w1 = 0x0;
+const uint32_t w2 = 0x5;
+const uint32_t w3 = 0xd;
+const uint32_t w4 = 0xa;  // Adaptive Median weight
+const uint32_t w5 = 0x8;  // Enhanced Adaptive Median weight
+const uint32_t w6 = 0x4;  // Paeth weight
+const uint32_t w7 = 0x6;  // GAP weight
 
     switch (i) {
         case 0:

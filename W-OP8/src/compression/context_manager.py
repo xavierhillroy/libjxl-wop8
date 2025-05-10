@@ -3,6 +3,7 @@ import os
 import re
 import shutil
 import subprocess
+import time
 
 class ContextFileManager:
     """
@@ -170,15 +171,37 @@ class ContextFileManager:
             print(f"Error updating weights: {e}")
             return False
     
-    def rebuild_library(self):
+    def rebuild_library(self, clean=False):
         """
         Rebuild the JPEG XL library after modifying source code.
+        Ensures the rebuild properly incorporates changes.
         
         Returns:
             bool: True if build succeeded, False otherwise
         """
         try:
             print(f"Rebuilding JPEG XL library in {self.build_dir}...")
+            
+            # First, force a touch on the modified file to ensure timestamp changes
+            # This helps make sure the build system recognizes the file changed
+            current_time = time.time()
+            os.utime(self.context_file_path, (current_time, current_time))
+            
+            # Run a clean build to ensure no caching issues
+            if clean:
+                print("Running clean build...")
+                clean_result = subprocess.run(
+                    ["ninja", "clean"], 
+                    cwd=self.build_dir, 
+                    capture_output=True,
+                    text=True,
+                    check=False
+                )
+                if clean_result.returncode != 0:
+                    print(f"Clean failed: {clean_result.stderr}")
+                    # Continue anyway since clean failure might be okay
+            
+            # Now run the full rebuild
             result = subprocess.run(
                 ["ninja"], 
                 cwd=self.build_dir, 
@@ -190,8 +213,16 @@ class ContextFileManager:
             if result.returncode != 0:
                 print(f"Build failed: {result.stderr}")
                 return False
-                
-            print("Build succeeded")
+            
+            # Verify binary timestamps to ensure they were actually rebuilt
+            cjxl_path = os.path.join(self.build_dir, 'tools', 'cjxl')
+            if os.path.exists(cjxl_path):
+                cjxl_mtime = os.path.getmtime(cjxl_path)
+                if cjxl_mtime < current_time:
+                    print("Warning: cjxl binary wasn't updated during rebuild!")
+                    return False
+            
+            print("Build succeeded and binaries were updated")
             return True
         except Exception as e:
             print(f"Error rebuilding library: {e}")
