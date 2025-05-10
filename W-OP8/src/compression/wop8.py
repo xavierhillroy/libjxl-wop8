@@ -46,7 +46,7 @@ class WOP8Compression:
         # Rebuild library
         return self.context_manager.rebuild_library()
     
-    def compress_dataset(self, image_paths, dataset_name):
+    def compress_dataset(self, image_paths, run_name):
         """
         Compress a dataset using W-OP8 with the optimized weights.
         
@@ -58,8 +58,8 @@ class WOP8Compression:
             dict: Dictionary with compression results
         """
         # Set up output directories
-        compressed_dir = os.path.join(COMPRESSED_DIR, dataset_name, 'wop8')
-        decompressed_dir = os.path.join(COMPRESSED_DIR, dataset_name, 'wop8_decompressed')
+        compressed_dir = os.path.join(COMPRESSED_DIR, run_name, 'wop8')
+        decompressed_dir = os.path.join(COMPRESSED_DIR, run_name, 'wop8_decompressed')
         
         os.makedirs(compressed_dir, exist_ok=True)
         os.makedirs(decompressed_dir, exist_ok=True)
@@ -67,7 +67,7 @@ class WOP8Compression:
         # Compress images
         results = {}
         
-        for input_path in tqdm(image_paths, desc=f"Compressing {dataset_name} with W-OP8"):
+        for input_path in tqdm(image_paths, desc=f"Compressing {run_name} with W-OP8"):
             image_name = os.path.basename(input_path)
             compressed_path = os.path.join(compressed_dir, f"{os.path.splitext(image_name)[0]}.jxl")
             decompressed_path = os.path.join(decompressed_dir, image_name)

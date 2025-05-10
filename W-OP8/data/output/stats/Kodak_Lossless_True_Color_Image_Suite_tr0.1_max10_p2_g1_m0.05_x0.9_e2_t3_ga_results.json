@@ -1,0 +1,50 @@
+{
+  "run_name": "Kodak_Lossless_True_Color_Image_Suite_tr0.1_max10_p2_g1_m0.05_x0.9_e2_t3",
+  "generations_completed": 1,
+  "best_candidate": [
+    8,
+    0,
+    5,
+    13,
+    10,
+    8,
+    4,
+    6
+  ],
+  "best_fitness": -836409,
+  "generation_results": [
+    {
+      "generation": 0,
+      "candidates": [
+        {
+          "weights": [
+            8,
+            0,
+            5,
+            13,
+            10,
+            8,
+            4,
+            6
+          ],
+          "fitness": -836409,
+          "total_size": 836409
+        },
+        {
+          "weights": [
+            10,
+            3,
+            2,
+            12,
+            3,
+            11,
+            11,
+            8
+          ],
+          "fitness": -839249,
+          "total_size": 839249
+        }
+      ]
+    }
+  ]
+}

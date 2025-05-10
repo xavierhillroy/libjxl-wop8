@@ -9,7 +9,7 @@ from config import STATS_DIR
 from src.compression.wop8 import WOP8Compression
 from src.reporting.spreadsheet import update_with_wop8_results
 
-def apply_wop8_to_testing(dataset_name, test_paths, excel_path, best_weights):
+def apply_wop8_to_testing(run_name, test_paths, excel_path, best_weights):
     """
     Apply W-OP8 compression with best weights to the testing set and update spreadsheet.
     
@@ -35,7 +35,7 @@ def apply_wop8_to_testing(dataset_name, test_paths, excel_path, best_weights):
     
     # Compress testing set
     print(f"Compressing {len(test_paths)} testing images...")
-    wop8_results = wop8_compressor.compress_dataset(test_paths, dataset_name)
+    wop8_results = wop8_compressor.compress_dataset(test_paths, run_name)
     
     # Format results for spreadsheet update
     formatted_results = {
@@ -59,11 +59,11 @@ def apply_wop8_to_testing(dataset_name, test_paths, excel_path, best_weights):
         print("Failed to update spreadsheet with W-OP8 results")
     
     # Save summary to stats file
-    results_path = os.path.join(STATS_DIR, f"{dataset_name}_wop8_results.json")
+    results_path = os.path.join(STATS_DIR, f"{run_name}_wop8_results.json")
     with open(results_path, 'w') as f:
         import json
         json.dump({
-            'dataset': dataset_name,
+            'run_name': run_name,
             'best_weights': best_weights,
             'total_compressed_size': sum(result['size'] for result in wop8_results.values()),
             'average_mae': sum(result['mae'] for result in wop8_results.values()) / len(wop8_results) if wop8_results else 0,
@@ -82,7 +82,7 @@ from config import STATS_DIR
 from src.compression.wop8 import WOP8Compression
 from src.reporting.spreadsheet import update_with_wop8_results
 
-def apply_wop8_to_all_images(dataset_name, train_paths, test_paths, excel_path, best_weights):
+def apply_wop8_to_all_images(run_name, train_paths, test_paths, excel_path, best_weights):
     """
     Apply W-OP8 compression with best weights to ALL images and update spreadsheet.
     
@@ -110,11 +110,11 @@ def apply_wop8_to_all_images(dataset_name, train_paths, test_paths, excel_path, 
     
     # Compress testing set (will be used to update the "Testing" sheet)
     print(f"Compressing {len(test_paths)} testing images...")
-    test_results = wop8_compressor.compress_dataset(test_paths, dataset_name)
+    test_results = wop8_compressor.compress_dataset(test_paths, run_name)
     
     # Compress training set (just for completeness, not updating the Training sheet)
     print(f"Compressing {len(train_paths)} training images...")
-    train_results = wop8_compressor.compress_dataset(train_paths, dataset_name)
+    train_results = wop8_compressor.compress_dataset(train_paths, run_name)
     
     # Combine all results
     all_results = {**train_results, **test_results}
@@ -158,11 +158,11 @@ def apply_wop8_to_all_images(dataset_name, train_paths, test_paths, excel_path, 
         print("Failed to update spreadsheet with W-OP8 results")
     
     # Save summary to stats file
-    results_path = os.path.join(STATS_DIR, f"{dataset_name}_wop8_results.json")
+    results_path = os.path.join(STATS_DIR, f"{run_name}_wop8_results.json")
     with open(results_path, 'w') as f:
         import json
         json.dump({
-            'dataset': dataset_name,
+            'run_name': run_name,
             'best_weights': best_weights,
             'total_compressed_size': sum(result['size'] for result in all_results.values()),
             'average_mae': sum(result['mae'] for result in all_results.values()) / len(all_results) if all_results else 0,

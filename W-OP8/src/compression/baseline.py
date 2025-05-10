@@ -133,7 +133,7 @@ class BaselineCompression:
             print(f"Error compressing image: {e}")
             return None
     
-    def process_dataset(self, image_paths, dataset_name, decompress=True):
+    def process_dataset(self, image_paths, run_name, decompress=True):
         """
         Process a list of images with baseline compression.
         
@@ -150,15 +150,15 @@ class BaselineCompression:
                     ...
                 }
         """
-        compressed_dir = os.path.join(COMPRESSED_DIR, dataset_name, 'baseline')
-        decompressed_dir = os.path.join(COMPRESSED_DIR, dataset_name, 'baseline_decompressed')
+        compressed_dir = os.path.join(COMPRESSED_DIR, run_name, 'baseline')
+        decompressed_dir = os.path.join(COMPRESSED_DIR, run_name, 'baseline_decompressed')
         
         os.makedirs(compressed_dir, exist_ok=True)
         if decompress:
             os.makedirs(decompressed_dir, exist_ok=True)
         
         results = {}
-        for input_path in tqdm(image_paths, desc=f"Compressing {dataset_name} with baseline"):
+        for input_path in tqdm(image_paths, desc=f"Compressing {run_name} with baseline"):
             image_name = os.path.basename(input_path)
             
             compressed_path = os.path.join(compressed_dir, f"{os.path.splitext(image_name)[0]}.jxl")

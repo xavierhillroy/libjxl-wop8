@@ -1,6 +1,6 @@
 {
-  "dataset": "Kodak_Lossless_True_Color_Image_Suite",
-  "generations_completed": 3,
+  "run_name": "Kodak_Lossless_True_Color_Image_Suite_tr0.1_max10_p3_g2_m0.05_x0.9_e2_t3",
+  "generations_completed": 2,
   "best_candidate": [
     8,
     0,
@@ -90,53 +90,6 @@
           ],
           "fitness": -839249,
           "total_size": 839249
-        },
-        {
-          "weights": [
-            8,
-            0,
-            5,
-            13,
-            10,
-            8,
-            4,
-            6
-          ],
-          "fitness": -836409,
-          "total_size": 836409
-        }
-      ]
-    },
-    {
-      "generation": 2,
-      "candidates": [
-        {
-          "weights": [
-            8,
-            0,
-            5,
-            13,
-            10,
-            8,
-            4,
-            6
-          ],
-          "fitness": -836409,
-          "total_size": 836409
-        },
-        {
-          "weights": [
-            8,
-            0,
-            5,
-            13,
-            10,
-            8,
-            4,
-            6
-          ],
-          "fitness": -836409,
-          "total_size": 836409
         },
         {
           "weights": [

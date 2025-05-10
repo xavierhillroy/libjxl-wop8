@@ -7,7 +7,7 @@ import pandas as pd
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
 from config import SPREADSHEETS_DIR
 
-def create_dataset_spreadsheet(train_stats, test_stats, dataset_name):
+def create_dataset_spreadsheet(train_stats, test_stats, run_name):
     """
     Create a spreadsheet with multiple sheets for a dataset.
     
@@ -21,7 +21,7 @@ def create_dataset_spreadsheet(train_stats, test_stats, dataset_name):
     """
     # Create directory if it doesn't exist
     os.makedirs(SPREADSHEETS_DIR, exist_ok=True)
-    excel_path = os.path.join(SPREADSHEETS_DIR, f"{dataset_name}_results.xlsx")
+    excel_path = os.path.join(SPREADSHEETS_DIR, f"{run_name}_results.xlsx")
     
     # Define columns for training sheet
     train_columns = [

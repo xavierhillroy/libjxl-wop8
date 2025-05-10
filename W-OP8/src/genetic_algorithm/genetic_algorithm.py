@@ -6,6 +6,7 @@ import time
 from tqdm import tqdm
 import json
 import pandas as pd
+from datetime import datetime, timedelta
 
 # Add parent directory to path to find config
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
@@ -19,13 +20,13 @@ class GeneticAlgorithm:
     Genetic Algorithm for optimizing W-OP8 predictor weights.
     """
     
-    def __init__(self, dataset_name, excel_path, train_paths, population_size=30, 
+    def __init__(self, run_name, excel_path, train_paths, population_size=30, 
                  generations=24, mutation_rate=0.05, crossover_rate=0.9, 
                  elitism_count=2, tournament_size=3):
         """
         Initialize the genetic algorithm.
         """
-        self.dataset_name = dataset_name
+        self.run_name = run_name
         self.excel_path = excel_path
         self.train_paths = train_paths
         
@@ -55,7 +56,7 @@ class GeneticAlgorithm:
         self.output_dir = os.path.join(
             os.path.dirname(os.path.dirname(self.excel_path)), 
             'compressed', 
-            self.dataset_name, 
+            self.run_name, 
             'ga_candidates'
         )
         os.makedirs(self.output_dir, exist_ok=True)
@@ -64,7 +65,7 @@ class GeneticAlgorithm:
         os.makedirs(STATS_DIR, exist_ok=True)
         
         # Ensure WOP8 is active
-        self._switch_to_wop8()
+        self._switch_to_wop8()  
     
     def _switch_to_wop8(self):
         """Switch to W-OP8 implementation"""
@@ -264,11 +265,11 @@ class GeneticAlgorithm:
         #     print(f"Error updating spreadsheet: {e}")
         #     return False
     
-    def run(self):
+    def run(self, progress_callback=None):
         """
-        Run the genetic algorithm.
+        Run the genetic algorithm with progress tracking.
         """
-        print(f"Starting GA optimization for {self.dataset_name}")
+        print(f"Starting GA optimization for {self.run_name}")
         print(f"Population size: {self.population_size}, Generations: {self.generations}")
         
         # Initialize population
@@ -278,8 +279,12 @@ class GeneticAlgorithm:
         best_candidate = None
         best_fitness = float('-inf')
         
+        # Track generation times
+        generation_times = []
+        
         # Run for specified number of generations
         for generation in range(self.generations):
+            gen_start_time = time.time()
             print(f"Generation {generation+1}/{self.generations}")
             
             # Evaluate current population
@@ -338,6 +343,30 @@ class GeneticAlgorithm:
             
             # Save intermediate results
             self._save_results(generation)
+            
+            # Calculate generation time
+            gen_time = time.time() - gen_start_time
+            generation_times.append(gen_time)
+            
+            # Estimate remaining time
+            if len(generation_times) > 0:
+                avg_time = sum(generation_times) / len(generation_times)
+                remaining_generations = self.generations - (generation + 1)
+                est_remaining_seconds = avg_time * remaining_generations
+                est_remaining = str(timedelta(seconds=int(est_remaining_seconds))).split('.')[0]
+            else:
+                est_remaining = "Calculating..."
+            
+            # Call progress callback
+            if progress_callback:
+                progress_callback(
+                    "ga",
+                    f"Generation {generation + 1}/{self.generations}",
+                    generation + 1,
+                    best_candidate,
+                    best_fitness,
+                    est_remaining
+                )
         
         # Final update to spreadsheet
         self.update_spreadsheet()
@@ -348,7 +377,7 @@ class GeneticAlgorithm:
             print(f"Final best weights: {best_candidate} (Fitness: {best_fitness})")
             
             # Save best candidate to a file
-            best_candidate_path = os.path.join(STATS_DIR, f"{self.dataset_name}_best_weights.json")
+            best_candidate_path = os.path.join(STATS_DIR, f"{self.run_name}_best_weights.json")
             with open(best_candidate_path, 'w') as f:
                 json.dump({
                     'weights': best_candidate,
@@ -364,10 +393,10 @@ class GeneticAlgorithm:
     
     def _save_results(self, generation):
         """Save intermediate results to a file"""
-        results_path = os.path.join(STATS_DIR, f"{self.dataset_name}_ga_results.json")
+        results_path = os.path.join(STATS_DIR, f"{self.run_name}_ga_results.json")
         with open(results_path, 'w') as f:
             json.dump({
-                'dataset': self.dataset_name,
+                'run_name': self.run_name,
                 'generations_completed': generation + 1,
                 'best_candidate': self.generation_results[-1]['candidates'][0]['weights'],
                 'best_fitness': self.generation_results[-1]['candidates'][0]['fitness'],
