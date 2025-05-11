@@ -87,7 +87,7 @@ brew install git python cmake ninja jpeg libpng
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/libjxl-wop8.git
+git clone https://github.com/xavierhillroy/libjxl-wop8.git
 cd libjxl-wop8
 
 # Run the setup script
@@ -359,7 +359,7 @@ Please note this is primarily an academic project, so major changes may not be a
 
 ```bash
 # Clone and set up development environment
-git clone https://github.com/yourusername/libjxl-wop8.git
+git clone https://github.com/xavierhillroy/libjxl-wop8.git
 cd libjxl-wop8
 ./setup_dev.sh
 
@@ -378,7 +378,7 @@ This project contains two licensed components:
 All W-OP8 modifications and additions (everything in `W-OP8/` directory and related enhancements) are licensed under the **MIT License** - see [LICENSE](LICENSE_WOP8) file.
 
 ### JPEG XL Base Library
-The original JPEG XL code retains its **BSD 3-Clause License** - see [LICENSE](LICENSE) file (the one you found).
+The original JPEG XL code retains its **BSD 3-Clause License** - see [LICENSE](LICENSE) file .
 
 ### License Compatibility
 Both licenses are compatible and permissive. The MIT License (for W-OP8) and BSD 3-Clause License (for JPEG XL) allow free use, modification, and distribution with proper attribution.

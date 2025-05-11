@@ -44,3 +44,5 @@ tools/conformance/__pycache__
 *.jpeg
 *.jpg
 *.PNG
+
+W-OP8/data/
