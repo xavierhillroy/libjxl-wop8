@@ -1,0 +1,18 @@
+{
+  "run_name": "Kodak_Lossless_True_Color_Image_Suite_tr0.1_max10_p1_g1_m0.05_x0.9_e2_t3",
+  "best_weights": [
+    8,
+    0,
+    5,
+    13,
+    10,
+    8,
+    4,
+    6
+  ],
+  "total_compressed_size": 10313744,
+  "average_mae": 0.0,
+  "compressed_count": 24,
+  "test_count": 22,
+  "train_count": 2
+}

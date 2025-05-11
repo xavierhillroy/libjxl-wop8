@@ -1,6 +1,20 @@
-# JPEG XL reference implementation
-> **Thesis Project Note**: This repository contains modifications for lossless compression optimization research focusing on enhancing weighted average prediction functions. See the [thesis directory](./thesis/README.md) for details on the implementation and usage of the W-OP8 approach.
+# 🔔 W-OP8 Enhanced Version
 
+**This repository contains JPEG XL with W-OP8 optimizations.**
+
+📘 **For W-OP8 setup, usage, and documentation: [README_WOP8.md](README_WOP8.md)**
+
+**Quick Start with W-OP8:**
+```bash
+./setup.sh
+cd W-OP8
+python3 main.py
+```
+
+---
+
+
+# JPEG XL reference implementation
 
 [![Build/Test](https://github.com/libjxl/libjxl/actions/workflows/build_test.yml/badge.svg)](
 https://github.com/libjxl/libjxl/actions/workflows/build_test.yml)

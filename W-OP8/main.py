@@ -11,15 +11,7 @@ def main():
     """Main entry point for W-OP8 application"""
     # Clear screen
     os.system('clear' if os.name == 'posix' else 'cls')
-    
-    # Display WOP-8 banner
-    banner = pyfiglet.figlet_format("WOP-8", font="larry3d")
-            # title_text = pyfiglet.figlet_format("TERMINAL TYPER", font="larry3d")
 
-    print(banner)
-    print("Welcome to W-OP8: Weight-Optimized JPEG XL Compression")
-    print("=" * 50)
-    print()
     
     # Launch TUI
     try:
