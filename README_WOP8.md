@@ -51,7 +51,7 @@ python3 main.py
 ## 📋 Prerequisites
 
 ### System Requirements
-- **OS**: Linux (Ubuntu 20.04+) or macOS (10.15+)
+- **OS**: Linux  or macOS 
 - **Memory**: Minimum 8GB RAM (16GB recommended for large datasets)
 - **Storage**: ~5GB for build files, additional space for your datasets
 - **Processor**: Multi-core recommended for faster GA optimization
