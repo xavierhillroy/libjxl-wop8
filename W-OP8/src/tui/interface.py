@@ -11,6 +11,7 @@ from rich.layout import Layout
 from rich.live import Live
 from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn, TimeRemainingColumn
 from rich.spinner import Spinner
+from rich.text import Text
 import pyfiglet
 from rich.markdown import Markdown
 
@@ -294,7 +295,7 @@ Run: {run_name}
         self.ga_time_remaining = "Calculating..."
         
         # Initialize live display
-        with Live(layout, refresh_per_second=2, console=self.console) as live:
+        with Live(layout, refresh_per_second=10, console=self.console) as live:
             try:
                 self.update_running_display(layout, "setup", "Starting...")
                 result = process_dataset(
@@ -354,7 +355,7 @@ Run: {run_name}
         setup_table = Table(show_header=False, box=None)
         setup_table.add_column(width=20)
         setup_table.add_column(width=60)
-        setup_table.add_row("Setup Phase", f"[cyan]◐[/cyan] {message}")
+        setup_table.add_row("Setup Phase", Spinner('dots', text=message))
         layout["main"].update(Panel(setup_table, title="Current Phase", border_style="green"))
     
     def update_baseline_display(self, layout, message):
@@ -363,7 +364,7 @@ Run: {run_name}
         baseline_table.add_column(width=20)
         baseline_table.add_column(width=60)
         baseline_table.add_row("Setup Phase", "[green]✓[/green] Completed")
-        baseline_table.add_row("Baseline", f"[cyan]◐[/cyan] {message}")
+        baseline_table.add_row("Baseline", Spinner('dots', text=message))
         layout["main"].update(Panel(baseline_table, title="Current Phase", border_style="green"))
     
     def update_ga_display(self, layout, message):
@@ -386,26 +387,24 @@ Run: {run_name}
         wop8_table.add_column(width=20)
         wop8_table.add_column(width=60)
         wop8_table.add_row("GA Optimization", "[green]✓[/green] Completed")
-        wop8_table.add_row("W-OP8 Application", f"[cyan]◐[/cyan] {message}")
+        wop8_table.add_row("W-OP8 Application", Spinner('dots', text=message))
         layout["main"].update(Panel(wop8_table, title="Current Phase", border_style="green"))
     
     def create_ga_status_panel(self, current_gen, total_gen, best_weights, best_fitness, time_remaining, status_message, is_running=False):
         """Create a clean GA status panel"""
         if is_running:
-            status_icon = "[yellow]◐[/yellow]"
-            time_text = time_remaining or "Estimating..."
+            status_cell = Spinner('dots', text=status_message)
         else:
-            status_icon = "[green]✓[/green]"
-            time_text = "Completed"
+            status_cell = f"[green]✓[/green] {status_message}"
         
         # Create main table
         ga_table = Table(show_header=False, box=None, padding=(0, 1))
         ga_table.add_column(width=25)
         ga_table.add_column(width=55)
         
-        ga_table.add_row("Status:", f"{status_icon} {status_message}")
+        ga_table.add_row("Status:", status_cell)
         ga_table.add_row("Generation:", f"{current_gen}/{total_gen}")
-        ga_table.add_row("Time Remaining:", f"[dim]{time_text}[/dim]")
+        ga_table.add_row("Time Remaining:", f"[dim]{time_remaining or 'Estimating...'}[/dim]")
         
         if best_weights and current_gen > 0:
             ga_table.add_row("", "")  # Spacer
@@ -493,16 +492,17 @@ Run: {run_name}
         return None
     
     def show_error_screen(self, error_message):
-        """Show a clean error screen"""
+        """Show a clean, highly visible error screen"""
         self.clear_screen()
-        
+        # Create a big, bold, red error panel
         error_panel = Panel(
-            f"[red]Error:[/red]\n\n{error_message}\n\n[dim]Press Enter to return to main menu...[/dim]",
-            title="[red]Error Occurred[/red]",
-            border_style="red"
+            f"\n[bold red]ERROR[/bold red]\n\n[white on red]{error_message}[/white on red]\n\n[dim]Press Enter to return to main menu...[/dim]",
+            title="[bold red]Error Occurred[/bold red]",
+            border_style="red",
+            padding=(2, 8),  # More padding for visibility
+            expand=True
         )
-        
-        self.console.print(error_panel)
+        self.console.print(error_panel, justify="center")
         input()
         self.current_screen = "main"
     

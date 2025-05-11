@@ -25,7 +25,8 @@
 namespace jxl {
 
 namespace weighted {
-constexpr static size_t kNumPredictors = 4;
+// Modified: Expanded from 4 to 8 predictors 
+constexpr static size_t kNumPredictors = 8;
 constexpr static int64_t kPredExtraBits = 3;
 constexpr static int64_t kPredictionRound = ((1 << kPredExtraBits) >> 1) - 1;
 constexpr static size_t kNumProperties = 1;
@@ -57,7 +58,13 @@ struct Header : public Fields {
     JXL_QUIET_RETURN_IF_ERROR(visitor->Bits(4, 0xd, &w[0]));
     JXL_QUIET_RETURN_IF_ERROR(visitor->Bits(4, 0xc, &w[1]));
     JXL_QUIET_RETURN_IF_ERROR(visitor->Bits(4, 0xc, &w[2]));
-    JXL_QUIET_RETURN_IF_ERROR(visitor->Bits(4, 0xc, &w[3]));
+    JXL_QUIET_RETURN_IF_ERROR(visitor->Bits(4, 0xb, &w[3]));
+
+    // Modified: Added support for 4 additional predictor weights
+    JXL_QUIET_RETURN_IF_ERROR(visitor->Bits(4, 0xd, &w[4]));
+    JXL_QUIET_RETURN_IF_ERROR(visitor->Bits(4, 0xc, &w[5]));
+    JXL_QUIET_RETURN_IF_ERROR(visitor->Bits(4, 0xc, &w[6]));
+    JXL_QUIET_RETURN_IF_ERROR(visitor->Bits(4, 0xb, &w[7]));
     return true;
   }
 
@@ -170,13 +177,60 @@ struct State {
       (*properties)[offset++] = p;
     }
 
+    // Original predictors (unchanged)
     prediction[0] = W + NE - N;
     prediction[1] = N - (((sumWN + teNE) * header.p1C) >> 5);
     prediction[2] = W - (((sumWN + teNW) * header.p2C) >> 5);
-    prediction[3] =
-        N - ((teNW * header.p3Ca + teN * header.p3Cb + teNE * header.p3Cc +
-              (NN - N) * header.p3Cd + (NW - W) * header.p3Ce) >>
-             5);
+    prediction[3] = N - ((teNW * header.p3Ca + teN * header.p3Cb + 
+                        teNE * header.p3Cc + (NN - N) * header.p3Cd + 
+                        (NW - W) * header.p3Ce) >> 5);
+
+    // Modified: Added new medical image-specific predictors
+    // 1. GAP (Gradient Adjusted Prediction) implementation
+    pixel_type_w d_h = std::abs(N-NW) + std::abs(NE-N);
+    pixel_type_w d_v = std::abs(W-NW) + std::abs(N-NN);
+    pixel_type_w base_pred = (W + N)/2 + (NE - NW)/4;
+    pixel_type_w gap_pred = base_pred;
+
+    // Edge detection and adaptive prediction
+    if (d_v - d_h > 80) gap_pred = W;
+    else if (d_h - d_v > 80) gap_pred = N;
+    else if (d_v - d_h > 32) gap_pred = (gap_pred + W) / 2;
+    else if (d_h - d_v > 32) gap_pred = (gap_pred + N) / 2;
+    else if (d_v - d_h > 8) gap_pred = (3 * gap_pred + W) / 4;
+    else if (d_h - d_v > 8) gap_pred = (3 * gap_pred + N) / 4;
+
+    // 2. Adaptive Median predictor with error feedback
+    int error_const = 4;
+    pixel_type_w adaptive_med_pred;
+    if (NW >= std::max(N, W)) {
+        adaptive_med_pred = std::min(N, W) - (((std::min(teN, teW)) * error_const) >> 5);
+    } else if (NW <= std::min(N, W)) {
+        adaptive_med_pred = std::max(N, W) - (((std::max(teN, teW)) * error_const) >> 5);
+    } else {
+        adaptive_med_pred = (N+W -NW);
+    }
+
+    // 3. Enhanced Adaptive Median with error correction
+    int avg_error = (teN + teW + teNW) / 3;
+    int median_pred = (N > W) ?  
+                     ((W > NW) ? W : (N > NW) ? NW : N) :  
+                     ((N > NW) ? N : (W > NW) ? NW : W);
+    error_const = 5;
+    int shift = 6;
+    int enhanced_adaptive_median = median_pred - ((avg_error * error_const) >> shift);
+
+    // 4. Standard Paeth predictor
+    int p = N + W - NW;
+    int pa = abs(p - N);
+    int pb = abs(p - W);
+    int pc = abs(p - NW);
+
+    // Modified: Assign new predictors to prediction array
+    prediction[4] = adaptive_med_pred;
+    prediction[5] = enhanced_adaptive_median;
+    prediction[6] = (pa <= pb && pa <= pc) ? N : (pb <= pc) ? W : NW;
+    prediction[7] = gap_pred;
 
     pred = WeightedAverage(prediction, weights);
 
@@ -210,83 +264,110 @@ struct State {
   }
 };
 
-// Encoder helper function to set the parameters to some presets.
+// Modified: Updated predictor weights with values optimized for medical images
 inline void PredictorMode(int i, Header *header) {
-  switch (i) {
-    case 0:
-      // ~ lossless16 predictor
-      header->w[0] = 0xd;
-      header->w[1] = 0xc;
-      header->w[2] = 0xc;
-      header->w[3] = 0xc;
-      header->p1C = 16;
-      header->p2C = 10;
-      header->p3Ca = 7;
-      header->p3Cb = 7;
-      header->p3Cc = 7;
-      header->p3Cd = 0;
-      header->p3Ce = 0;
-      break;
-    case 1:
-      // ~ default lossless8 predictor
-      header->w[0] = 0xd;
-      header->w[1] = 0xc;
-      header->w[2] = 0xc;
-      header->w[3] = 0xb;
-      header->p1C = 8;
-      header->p2C = 8;
-      header->p3Ca = 4;
-      header->p3Cb = 0;
-      header->p3Cc = 3;
-      header->p3Cd = 23;
-      header->p3Ce = 2;
-      break;
-    case 2:
-      // ~ west lossless8 predictor
-      header->w[0] = 0xd;
-      header->w[1] = 0xc;
-      header->w[2] = 0xd;
-      header->w[3] = 0xc;
-      header->p1C = 10;
-      header->p2C = 9;
-      header->p3Ca = 7;
-      header->p3Cb = 0;
-      header->p3Cc = 0;
-      header->p3Cd = 16;
-      header->p3Ce = 9;
-      break;
-    case 3:
-      // ~ north lossless8 predictor
-      header->w[0] = 0xd;
-      header->w[1] = 0xd;
-      header->w[2] = 0xc;
-      header->w[3] = 0xc;
-      header->p1C = 16;
-      header->p2C = 8;
-      header->p3Ca = 0;
-      header->p3Cb = 16;
-      header->p3Cc = 0;
-      header->p3Cd = 23;
-      header->p3Ce = 0;
-      break;
-    case 4:
-    default:
-      // something else, because why not
-      header->w[0] = 0xd;
-      header->w[1] = 0xc;
-      header->w[2] = 0xc;
-      header->w[3] = 0xc;
-      header->p1C = 10;
-      header->p2C = 10;
-      header->p3Ca = 5;
-      header->p3Cb = 5;
-      header->p3Cc = 5;
-      header->p3Cd = 12;
-      header->p3Ce = 4;
-      break;
-  }
+    // Set Optimized Weights - currently optimized for the kodak dataset
+const uint32_t w0 = 0x8;  // Original predictor weights
+const uint32_t w1 = 0xe;
+const uint32_t w2 = 0xb;
+const uint32_t w3 = 0x5;
+const uint32_t w4 = 0xb;  // Adaptive Median weight
+const uint32_t w5 = 0xb;  // Enhanced Adaptive Median weight
+const uint32_t w6 = 0x6;  // Paeth weight
+const uint32_t w7 = 0x8;  // GAP weight
+
+    switch (i) {
+        case 0:
+            header->w[0] = w0;
+            header->w[1] = w1;
+            header->w[2] = w2;
+            header->w[3] = w3;
+            header->w[4] = w4;
+            header->w[5] = w5;
+            header->w[6] = w6;
+            header->w[7] = w7;
+            header->p1C = 16;
+            header->p2C = 10;
+            header->p3Ca = 7;
+            header->p3Cb = 7;
+            header->p3Cc = 7;
+            header->p3Cd = 0;
+            header->p3Ce = 0;
+            break;
+        case 1:
+            header->w[0] = w0;
+            header->w[1] = w1;
+            header->w[2] = w2;
+            header->w[3] = w3;
+            header->w[4] = w4;
+            header->w[5] = w5;
+            header->w[6] = w6;
+            header->w[7] = w7;
+            header->p1C = 8;
+            header->p2C = 8;
+            header->p3Ca = 4;
+            header->p3Cb = 0;
+            header->p3Cc = 3;
+            header->p3Cd = 23;
+            header->p3Ce = 2;
+            break;
+        case 2:
+            header->w[0] = w0;
+            header->w[1] = w1;
+            header->w[2] = w2;
+            header->w[3] = w3;
+            header->w[4] = w4;
+            header->w[5] = w5;
+            header->w[6] = w6;
+            header->w[7] = w7;
+            header->p1C = 10;
+            header->p2C = 9;
+            header->p3Ca = 7;
+            header->p3Cb = 0;
+            header->p3Cc = 0;
+            header->p3Cd = 16;
+            header->p3Ce = 9;
+            break;
+        case 3:
+            header->w[0] = w0;
+            header->w[1] = w1;
+            header->w[2] = w2;
+            header->w[3] = w3;
+            header->w[4] = w4;
+            header->w[5] = w5;
+            header->w[6] = w6;
+            header->w[7] = w7;
+            header->p1C = 16;
+            header->p2C = 8;
+            header->p3Ca = 0;
+            header->p3Cb = 16;
+            header->p3Cc = 0;
+            header->p3Cd = 23;
+            header->p3Ce = 0;
+            break;
+        case 4:
+        default:
+            header->w[0] = w0;
+            header->w[1] = w1;
+            header->w[2] = w2;
+            header->w[3] = w3;
+            header->w[4] = w4;
+            header->w[5] = w5;
+            header->w[6] = w6;
+            header->w[7] = w7;
+            header->p1C = 10;
+            header->p2C = 10;
+            header->p3Ca = 5;
+            header->p3Cb = 5;
+            header->p3Cc = 5;
+            header->p3Cd = 12;
+            header->p3Ce = 4;
+            break;
+    }
 }
+
 }  // namespace weighted
+
 
 // Stores a node and its two children at the same time. This significantly
 // reduces the number of branches needed during decoding.
@@ -322,18 +403,17 @@ class MATreeLookup {
   JXL_INLINE LookupResult Lookup(const Properties &properties) const {
     uint32_t pos = 0;
     while (true) {
-#define TRAVERSE_THE_TREE                                                \
-  {                                                                      \
-    const FlatDecisionNode &node = nodes_[pos];                          \
-    if (node.property0 < 0) {                                            \
-      return {node.childID, node.predictor, node.predictor_offset,       \
-              node.multiplier};                                          \
-    }                                                                    \
-    bool p0 = properties[node.property0] <= node.splitval0;              \
-    uint32_t off0 = properties[node.properties[0]] <= node.splitvals[0]; \
-    uint32_t off1 =                                                      \
-        2 | int{properties[node.properties[1]] <= node.splitvals[1]};    \
-    pos = node.childID + (p0 ? off1 : off0);                             \
+#define TRAVERSE_THE_TREE                                                      \
+  {                                                                            \
+    const FlatDecisionNode &node = nodes_[pos];                                \
+    if (node.property0 < 0) {                                                  \
+      return {node.childID, node.predictor, node.predictor_offset,             \
+              node.multiplier};                                                \
+    }                                                                          \
+    bool p0 = properties[node.property0] <= node.splitval0;                    \
+    uint32_t off0 = properties[node.properties[0]] <= node.splitvals[0];       \
+    uint32_t off1 = 2 | (properties[node.properties[1]] <= node.splitvals[1]); \
+    pos = node.childID + (p0 ? off1 : off0);                                   \
   }
 
       TRAVERSE_THE_TREE;

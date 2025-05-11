@@ -1,5 +1,3 @@
-## Demonstrations
-
 
 # W-OP8: Weight-Optimized JPEG XL Compression
 
