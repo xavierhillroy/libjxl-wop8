@@ -672,7 +672,7 @@ def create_summary_sheet(excel_path):
         # Convert to DataFrame
         summary_df = pd.DataFrame(summary_data)
         summary_df.columns = summary_data[0]
-        summary_df = summary_df[1:]  # Remove header row
+        # summary_df = summary_df[1:]  # Remove header row
         
         # Read the existing workbook to preserve all sheets
         with pd.ExcelWriter(excel_path, mode='a', if_sheet_exists='replace') as writer:

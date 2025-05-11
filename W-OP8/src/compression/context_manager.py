@@ -203,7 +203,7 @@ class ContextFileManager:
             
             # Now run the full rebuild
             result = subprocess.run(
-                ["ninja"], 
+                ["ninja", "cjxl", "djxl"], 
                 cwd=self.build_dir, 
                 capture_output=True,
                 text=True,
