@@ -81,14 +81,29 @@ def create_dataset_spreadsheet(train_stats, test_stats, run_name):
     # Ensure columns are in the right order
     all_df = all_df[test_columns]
     
+    # Create effort level sheets with the same structure as All Images
+    effort7_df = pd.DataFrame(all_stats)
+    effort9_df = pd.DataFrame(all_stats)
+    
+    for col in test_columns:
+        if col not in effort7_df.columns:
+            effort7_df[col] = None
+            effort9_df[col] = None
+    
+    # Ensure columns are in the right order
+    effort7_df = effort7_df[test_columns]
+    effort9_df = effort9_df[test_columns]
+    
     # Write to Excel file with multiple sheets
     with pd.ExcelWriter(excel_path) as writer:
         train_df.to_excel(writer, sheet_name='Training', index=False)
         test_df.to_excel(writer, sheet_name='Testing', index=False)
         all_df.to_excel(writer, sheet_name='All Images', index=False)
+        effort7_df.to_excel(writer, sheet_name='Effort Level 7', index=False)
+        effort9_df.to_excel(writer, sheet_name='Effort Level 9', index=False)
         
         # Add a totals row to each sheet
-        for sheet_name in ['Training', 'Testing', 'All Images']:
+        for sheet_name in ['Training', 'Testing', 'All Images', 'Effort Level 7', 'Effort Level 9']:
             worksheet = writer.sheets[sheet_name]
             num_rows = len(train_df) if sheet_name == 'Training' else (len(test_df) if sheet_name == 'Testing' else len(all_df))
             worksheet.cell(row=num_rows+2, column=1, value="TOTAL")
@@ -217,6 +232,7 @@ def update_spreadsheet_with_ga_candidate(excel_path, candidate, results):
     except Exception as e:
         print(f"Error updating spreadsheet with GA candidate: {e}")
         return False
+
 def update_with_wop8_results(excel_path, wop8_results):
     """
     Update testing and all images sheets with W-OP8 results.
@@ -311,7 +327,7 @@ def update_with_wop8_results(excel_path, wop8_results):
                 improvement_percentage = (size_reduction / baseline_size) * 100
                 all_df.loc[all_mask, 'improvement_percentage'] = improvement_percentage
         
-        # Recalculate totals for testing sheet
+        # Recalculate totals for testing sheet with correct BPP calculation
         test_total_row = pd.DataFrame({
             'image_name': ['TOTAL'],
             'width': [None],
@@ -319,17 +335,32 @@ def update_with_wop8_results(excel_path, wop8_results):
             'num_pixels': [test_df['num_pixels'].sum()],
             'uncompressed_size_bytes': [test_df['uncompressed_size_bytes'].sum()],
             'baseline_size_bytes': [test_df['baseline_size_bytes'].sum()],
-            'baseline_bpp': [test_df['baseline_bpp'].mean()],
             'baseline_mae': [test_df['baseline_mae'].mean()],
             'wop8_size_bytes': [test_df['wop8_size_bytes'].sum()],
-            'wop8_bpp': [test_df['wop8_bpp'].mean()],
             'wop8_mae': [test_df['wop8_mae'].mean()],
             'size_reduction_bytes': [test_df['size_reduction_bytes'].sum()],
-            'bpp_improvement': [test_df['bpp_improvement'].mean()],
-            'improvement_percentage': [test_df['improvement_percentage'].mean()]
         })
         
-        # Recalculate totals for all images sheet
+        # Calculate BPP based on total dataset values
+        total_pixels = test_total_row['num_pixels'].values[0]
+        baseline_total_size = test_total_row['baseline_size_bytes'].values[0]
+        wop8_total_size = test_total_row['wop8_size_bytes'].values[0]
+        
+        # Calculate BPP for total dataset
+        baseline_bpp = (baseline_total_size * 8) / total_pixels
+        wop8_bpp = (wop8_total_size * 8) / total_pixels
+        
+        # Calculate BPP improvement and percentage based on totals
+        bpp_improvement = baseline_bpp - wop8_bpp
+        improvement_percentage = (test_total_row['size_reduction_bytes'].values[0] / baseline_total_size) * 100
+        
+        # Add these calculated values to the total row
+        test_total_row['baseline_bpp'] = baseline_bpp
+        test_total_row['wop8_bpp'] = wop8_bpp
+        test_total_row['bpp_improvement'] = bpp_improvement
+        test_total_row['improvement_percentage'] = improvement_percentage
+        
+        # Similar calculations for all images sheet
         all_total_row = pd.DataFrame({
             'image_name': ['TOTAL'],
             'width': [None],
@@ -337,26 +368,30 @@ def update_with_wop8_results(excel_path, wop8_results):
             'num_pixels': [all_df['num_pixels'].sum()],
             'uncompressed_size_bytes': [all_df['uncompressed_size_bytes'].sum()],
             'baseline_size_bytes': [all_df['baseline_size_bytes'].sum()],
-            'baseline_bpp': [all_df['baseline_bpp'].mean()],
             'baseline_mae': [all_df['baseline_mae'].mean()],
             'wop8_size_bytes': [all_df['wop8_size_bytes'].sum()],
-            'wop8_bpp': [all_df['wop8_bpp'].mean()],
             'wop8_mae': [all_df['wop8_mae'].mean()],
             'size_reduction_bytes': [all_df['size_reduction_bytes'].sum()],
-            'bpp_improvement': [all_df['bpp_improvement'].mean()],
-            'improvement_percentage': [all_df['improvement_percentage'].mean()]
         })
         
-        # Add any columns from the original total row that we didn't calculate
-        if test_total is not None:
-            for col in test_total.columns:
-                if col not in test_total_row.columns:
-                    test_total_row[col] = test_total[col].values[0]
-                    
-        if all_total is not None:
-            for col in all_total.columns:
-                if col not in all_total_row.columns:
-                    all_total_row[col] = all_total[col].values[0]
+        # Calculate BPP based on total dataset values for all images
+        total_pixels = all_total_row['num_pixels'].values[0]
+        baseline_total_size = all_total_row['baseline_size_bytes'].values[0]
+        wop8_total_size = all_total_row['wop8_size_bytes'].values[0]
+        
+        # Calculate BPP for total dataset
+        baseline_bpp = (baseline_total_size * 8) / total_pixels
+        wop8_bpp = (wop8_total_size * 8) / total_pixels
+        
+        # Calculate BPP improvement and percentage based on totals
+        bpp_improvement = baseline_bpp - wop8_bpp
+        improvement_percentage = (all_total_row['size_reduction_bytes'].values[0] / baseline_total_size) * 100
+        
+        # Add these calculated values to the total row
+        all_total_row['baseline_bpp'] = baseline_bpp
+        all_total_row['wop8_bpp'] = wop8_bpp
+        all_total_row['bpp_improvement'] = bpp_improvement
+        all_total_row['improvement_percentage'] = improvement_percentage
         
         # Append total rows back to dataframes
         test_df = pd.concat([test_df, test_total_row], ignore_index=True)
@@ -371,102 +406,7 @@ def update_with_wop8_results(excel_path, wop8_results):
     except Exception as e:
         print(f"Error updating with W-OP8 results: {e}")
         return False
-# def update_with_wop8_results(excel_path, wop8_results):
-#     """
-#     Update testing and all images sheets with W-OP8 results.
-    
-#     Args:
-#         excel_path (str): Path to the Excel file
-#         wop8_results (dict): Dictionary with W-OP8 results
-#             {
-#                 'results': [
-#                     {
-#                         'image_name': 'img1.png', 
-#                         'size': 1000, 
-#                         'mae': 0.0
-#                     },
-#                     ...
-#                 ]
-#             }
-    
-#     Returns:
-#         bool: True if successful, False otherwise
-#     """
-#     try:
-#         # Read existing Excel file
-#         test_df = pd.read_excel(excel_path, sheet_name='Testing')
-#         all_df = pd.read_excel(excel_path, sheet_name='All Images')
-        
-#         # Update test_df with W-OP8 results
-#         for result in wop8_results['results']:
-#             img_name = result['image_name']
-#             size = result['size']
-#             mae = result['mae']
-            
-#             # Update testing sheet
-#             test_mask = test_df['image_name'] == img_name
-#             if any(test_mask):
-#                 test_df.loc[test_mask, 'wop8_size_bytes'] = size
-#                 test_df.loc[test_mask, 'wop8_mae'] = mae
-                
-#                 # Calculate derived metrics
-#                 baseline_size = test_df.loc[test_mask, 'baseline_size_bytes'].values[0]
-#                 num_pixels = test_df.loc[test_mask, 'num_pixels'].values[0]
-                
-#                 # Calculate W-OP8 bits per pixel correctly
-#                 wop8_bpp = (size * 8) / num_pixels
-#                 test_df.loc[test_mask, 'wop8_bpp'] = wop8_bpp
-                
-#                 # Calculate difference vs baseline
-#                 size_reduction = baseline_size - size
-#                 test_df.loc[test_mask, 'size_reduction_bytes'] = size_reduction
-                
-#                 # Calculate bpp improvement
-#                 baseline_bpp = test_df.loc[test_mask, 'baseline_bpp'].values[0]
-#                 bpp_improvement = baseline_bpp - wop8_bpp
-#                 test_df.loc[test_mask, 'bpp_improvement'] = bpp_improvement
-                
-#                 # Calculate improvement percentage
-#                 improvement_percentage = (size_reduction / baseline_size) * 100
-#                 test_df.loc[test_mask, 'improvement_percentage'] = improvement_percentage
-            
-#             # Update all images sheet
-#             all_mask = all_df['image_name'] == img_name
-#             if any(all_mask):
-#                 all_df.loc[all_mask, 'wop8_size_bytes'] = size
-#                 all_df.loc[all_mask, 'wop8_mae'] = mae
-                
-#                 # Calculate derived metrics
-#                 baseline_size = all_df.loc[all_mask, 'baseline_size_bytes'].values[0]
-#                 num_pixels = all_df.loc[all_mask, 'num_pixels'].values[0]
-                
-#                 # Calculate W-OP8 bits per pixel correctly
-#                 wop8_bpp = (size * 8) / num_pixels
-#                 all_df.loc[all_mask, 'wop8_bpp'] = wop8_bpp
-                
-#                 # Calculate difference vs baseline
-#                 size_reduction = baseline_size - size
-#                 all_df.loc[all_mask, 'size_reduction_bytes'] = size_reduction
-                
-#                 # Calculate bpp improvement
-#                 baseline_bpp = all_df.loc[all_mask, 'baseline_bpp'].values[0]
-#                 bpp_improvement = baseline_bpp - wop8_bpp
-#                 all_df.loc[all_mask, 'bpp_improvement'] = bpp_improvement
-                
-#                 # Calculate improvement percentage
-#                 improvement_percentage = (size_reduction / baseline_size) * 100
-#                 all_df.loc[all_mask, 'improvement_percentage'] = improvement_percentage
-        
-#         # Write updated dataframes back to Excel
-#         with pd.ExcelWriter(excel_path, mode='a', if_sheet_exists='replace') as writer:
-#             test_df.to_excel(writer, sheet_name='Testing', index=False)
-#             all_df.to_excel(writer, sheet_name='All Images', index=False)
-        
-#         return True
-#     except Exception as e:
-#         print(f"Error updating with W-OP8 results: {e}")
-#         return False
-# #
+
 def update_spreadsheet_with_baseline(excel_path, train_results, test_results):
     """
     Update the spreadsheet with baseline compression results.
@@ -607,6 +547,7 @@ def update_spreadsheet_with_baseline(excel_path, train_results, test_results):
     except Exception as e:
         print(f"Error updating spreadsheet with baseline results: {e}")
         return False
+
 def create_summary_sheet(excel_path):
     """
     Create a summary sheet with key metrics comparing baseline and W-OP8 performance.
@@ -672,7 +613,7 @@ def create_summary_sheet(excel_path):
         # Convert to DataFrame
         summary_df = pd.DataFrame(summary_data)
         summary_df.columns = summary_data[0]
-        # summary_df = summary_df[1:]  # Remove header row
+        summary_df = summary_df[1:]  # Remove header row
         
         # Read the existing workbook to preserve all sheets
         with pd.ExcelWriter(excel_path, mode='a', if_sheet_exists='replace') as writer:
@@ -704,4 +645,359 @@ def create_summary_sheet(excel_path):
         return True
     except Exception as e:
         print(f"Error creating summary sheet: {e}")
+        return False
+
+def update_with_effort_results(excel_path, effort_results):
+    """
+    Update effort level sheets with compression results.
+    
+    Args:
+        excel_path (str): Path to the Excel file
+        effort_results (dict): Dictionary with effort level results
+            {
+                'effort7': {
+                    'baseline': {image_name: {'size': size, 'mae': mae}, ...},
+                    'wop8': {image_name: {'size': size, 'mae': mae}, ...}
+                },
+                'effort9': {
+                    'baseline': {image_name: {'size': size, 'mae': mae}, ...},
+                    'wop8': {image_name: {'size': size, 'mae': mae}, ...}
+                }
+            }
+    
+    Returns:
+        bool: True if successful, False otherwise
+    """
+    try:
+        # Read existing Excel file
+        effort7_df = pd.read_excel(excel_path, sheet_name='Effort Level 7')
+        effort9_df = pd.read_excel(excel_path, sheet_name='Effort Level 9')
+        
+        # Store total rows before updating
+        effort7_total = effort7_df[effort7_df['image_name'] == 'TOTAL'].copy() if 'TOTAL' in effort7_df['image_name'].values else None
+        effort9_total = effort9_df[effort9_df['image_name'] == 'TOTAL'].copy() if 'TOTAL' in effort9_df['image_name'].values else None
+        
+        # Remove total rows for updating
+        effort7_df = effort7_df[effort7_df['image_name'] != 'TOTAL']
+        effort9_df = effort9_df[effort9_df['image_name'] != 'TOTAL']
+        
+        # Update Effort Level 7 sheet
+        baseline_effort7 = effort_results['effort7']['baseline']
+        wop8_effort7 = effort_results['effort7']['wop8']
+        
+        for img_name, result in baseline_effort7.items():
+            mask = effort7_df['image_name'] == img_name
+            if any(mask):
+                # Update baseline values
+                effort7_df.loc[mask, 'baseline_size_bytes'] = result['size']
+                effort7_df.loc[mask, 'baseline_mae'] = result['mae']
+                
+                # Calculate bits per pixel
+                num_pixels = effort7_df.loc[mask, 'num_pixels'].values[0]
+                baseline_bpp = (result['size'] * 8) / num_pixels
+                effort7_df.loc[mask, 'baseline_bpp'] = baseline_bpp
+                
+                # Update W-OP8 values if available
+                if img_name in wop8_effort7:
+                    wop8_result = wop8_effort7[img_name]
+                    effort7_df.loc[mask, 'wop8_size_bytes'] = wop8_result['size']
+                    effort7_df.loc[mask, 'wop8_mae'] = wop8_result['mae']
+                    
+                    # Calculate derived metrics
+                    wop8_bpp = (wop8_result['size'] * 8) / num_pixels
+                    effort7_df.loc[mask, 'wop8_bpp'] = wop8_bpp
+                    
+                    # Calculate differences
+                    size_reduction = result['size'] - wop8_result['size']
+                    effort7_df.loc[mask, 'size_reduction_bytes'] = size_reduction
+                    
+                    bpp_improvement = baseline_bpp - wop8_bpp
+                    effort7_df.loc[mask, 'bpp_improvement'] = bpp_improvement
+                    
+                    improvement_percentage = (size_reduction / result['size']) * 100
+                    effort7_df.loc[mask, 'improvement_percentage'] = improvement_percentage
+        
+        # Update Effort Level 9 sheet
+        baseline_effort9 = effort_results['effort9']['baseline']
+        wop8_effort9 = effort_results['effort9']['wop8']
+        
+        for img_name, result in baseline_effort9.items():
+            mask = effort9_df['image_name'] == img_name
+            if any(mask):
+                # Update baseline values
+                effort9_df.loc[mask, 'baseline_size_bytes'] = result['size']
+                effort9_df.loc[mask, 'baseline_mae'] = result['mae']
+                
+                # Calculate bits per pixel
+                num_pixels = effort9_df.loc[mask, 'num_pixels'].values[0]
+                baseline_bpp = (result['size'] * 8) / num_pixels
+                effort9_df.loc[mask, 'baseline_bpp'] = baseline_bpp
+                
+                # Update W-OP8 values if available
+                if img_name in wop8_effort9:
+                    wop8_result = wop8_effort9[img_name]
+                    effort9_df.loc[mask, 'wop8_size_bytes'] = wop8_result['size']
+                    effort9_df.loc[mask, 'wop8_mae'] = wop8_result['mae']
+                    
+                    # Calculate derived metrics
+                    wop8_bpp = (wop8_result['size'] * 8) / num_pixels
+                    effort9_df.loc[mask, 'wop8_bpp'] = wop8_bpp
+                    
+                    # Calculate differences
+                    size_reduction = result['size'] - wop8_result['size']
+                    effort9_df.loc[mask, 'size_reduction_bytes'] = size_reduction
+                    
+                    bpp_improvement = baseline_bpp - wop8_bpp
+                    effort9_df.loc[mask, 'bpp_improvement'] = bpp_improvement
+                    
+                    improvement_percentage = (size_reduction / result['size']) * 100
+                    effort9_df.loc[mask, 'improvement_percentage'] = improvement_percentage
+        
+        # Calculate totals for Effort Level 7 with correct BPP calculation
+        effort7_total_row = pd.DataFrame({
+            'image_name': ['TOTAL'],
+            'width': [None],
+            'height': [None],
+            'num_pixels': [effort7_df['num_pixels'].sum()],
+            'uncompressed_size_bytes': [effort7_df['uncompressed_size_bytes'].sum()],
+            'baseline_size_bytes': [effort7_df['baseline_size_bytes'].sum()],
+            'baseline_mae': [effort7_df['baseline_mae'].mean()],
+            'wop8_size_bytes': [effort7_df['wop8_size_bytes'].sum()],
+            'wop8_mae': [effort7_df['wop8_mae'].mean()],
+            'size_reduction_bytes': [effort7_df['size_reduction_bytes'].sum()],
+        })
+        
+        # Calculate BPP based on total dataset values for effort 7
+        total_pixels = effort7_total_row['num_pixels'].values[0]
+        baseline_total_size = effort7_total_row['baseline_size_bytes'].values[0]
+        wop8_total_size = effort7_total_row['wop8_size_bytes'].values[0]
+        
+        # Calculate BPP for total dataset
+        baseline_bpp = (baseline_total_size * 8) / total_pixels
+        wop8_bpp = (wop8_total_size * 8) / total_pixels
+        
+        # Calculate BPP improvement and percentage based on totals
+        bpp_improvement = baseline_bpp - wop8_bpp
+        improvement_percentage = (effort7_total_row['size_reduction_bytes'].values[0] / baseline_total_size) * 100
+        
+        # Add these calculated values to the total row
+        effort7_total_row['baseline_bpp'] = baseline_bpp
+        effort7_total_row['wop8_bpp'] = wop8_bpp
+        effort7_total_row['bpp_improvement'] = bpp_improvement
+        effort7_total_row['improvement_percentage'] = improvement_percentage
+        
+        # Calculate totals for Effort Level 9 with correct BPP calculation
+        effort9_total_row = pd.DataFrame({
+            'image_name': ['TOTAL'],
+            'width': [None],
+            'height': [None],
+            'num_pixels': [effort9_df['num_pixels'].sum()],
+            'uncompressed_size_bytes': [effort9_df['uncompressed_size_bytes'].sum()],
+            'baseline_size_bytes': [effort9_df['baseline_size_bytes'].sum()],
+            'baseline_mae': [effort9_df['baseline_mae'].mean()],
+            'wop8_size_bytes': [effort9_df['wop8_size_bytes'].sum()],
+            'wop8_mae': [effort9_df['wop8_mae'].mean()],
+            'size_reduction_bytes': [effort9_df['size_reduction_bytes'].sum()],
+        })
+        
+        # Calculate BPP based on total dataset values for effort 9
+        total_pixels = effort9_total_row['num_pixels'].values[0]
+        baseline_total_size = effort9_total_row['baseline_size_bytes'].values[0]
+        wop8_total_size = effort9_total_row['wop8_size_bytes'].values[0]
+        
+        # Calculate BPP for total dataset
+        baseline_bpp = (baseline_total_size * 8) / total_pixels
+        wop8_bpp = (wop8_total_size * 8) / total_pixels
+        
+        # Calculate BPP improvement and percentage based on totals
+        bpp_improvement = baseline_bpp - wop8_bpp
+        improvement_percentage = (effort9_total_row['size_reduction_bytes'].values[0] / baseline_total_size) * 100
+        
+        # Add these calculated values to the total row
+        effort9_total_row['baseline_bpp'] = baseline_bpp
+        effort9_total_row['wop8_bpp'] = wop8_bpp
+        effort9_total_row['bpp_improvement'] = bpp_improvement
+        effort9_total_row['improvement_percentage'] = improvement_percentage
+
+        # Append total rows back to dataframes
+        effort7_df = pd.concat([effort7_df, effort7_total_row], ignore_index=True)
+        effort9_df = pd.concat([effort9_df, effort9_total_row], ignore_index=True)
+        
+        # Write updated dataframes back to Excel
+        with pd.ExcelWriter(excel_path, mode='a', if_sheet_exists='replace') as writer:
+            effort7_df.to_excel(writer, sheet_name='Effort Level 7', index=False)
+            effort9_df.to_excel(writer, sheet_name='Effort Level 9', index=False)
+        
+        # Update summary sheet to include effort level results
+        update_summary_with_effort_results(excel_path)
+        
+        return True
+    except Exception as e:
+        print(f"Error updating with effort level results: {e}")
+        return False
+
+def update_summary_with_effort_results(excel_path):
+    """
+    Update the summary sheet to include both testing vs. all images comparison
+    and effort level results, with metrics calculated from totals.
+    
+    Args:
+        excel_path (str): Path to the Excel file
+        
+    Returns:
+        bool: True if successful, False otherwise
+    """
+    try:
+        # Read existing Excel file
+        test_df = pd.read_excel(excel_path, sheet_name='Testing')
+        all_df = pd.read_excel(excel_path, sheet_name='All Images')
+        effort7_df = pd.read_excel(excel_path, sheet_name='Effort Level 7')
+        effort9_df = pd.read_excel(excel_path, sheet_name='Effort Level 9')
+        
+        # Get total rows for data extraction
+        test_total = test_df[test_df['image_name'] == 'TOTAL'].iloc[0]
+        all_total = all_df[all_df['image_name'] == 'TOTAL'].iloc[0]
+        effort7_total = effort7_df[effort7_df['image_name'] == 'TOTAL'].iloc[0]
+        effort9_total = effort9_df[effort9_df['image_name'] == 'TOTAL'].iloc[0]
+        
+        # Calculate BPP correctly from totals (bytes*8/pixels)
+        # For Predictor Mode 6 (isolated)
+        test_total_pixels = test_total['num_pixels']
+        test_baseline_bpp = (test_total['baseline_size_bytes'] * 8) / test_total_pixels
+        test_wop8_bpp = (test_total['wop8_size_bytes'] * 8) / test_total_pixels
+        test_bpp_improvement = test_baseline_bpp - test_wop8_bpp
+        test_improvement_percentage = ((test_total['baseline_size_bytes'] - test_total['wop8_size_bytes']) / test_total['baseline_size_bytes']) * 100
+        
+        all_total_pixels = all_total['num_pixels']
+        all_baseline_bpp = (all_total['baseline_size_bytes'] * 8) / all_total_pixels
+        all_wop8_bpp = (all_total['wop8_size_bytes'] * 8) / all_total_pixels
+        all_bpp_improvement = all_baseline_bpp - all_wop8_bpp
+        all_improvement_percentage = ((all_total['baseline_size_bytes'] - all_total['wop8_size_bytes']) / all_total['baseline_size_bytes']) * 100
+        
+        # For Effort Levels
+        effort7_total_pixels = effort7_total['num_pixels']
+        effort7_baseline_bpp = (effort7_total['baseline_size_bytes'] * 8) / effort7_total_pixels
+        effort7_wop8_bpp = (effort7_total['wop8_size_bytes'] * 8) / effort7_total_pixels
+        effort7_bpp_improvement = effort7_baseline_bpp - effort7_wop8_bpp
+        effort7_improvement_percentage = ((effort7_total['baseline_size_bytes'] - effort7_total['wop8_size_bytes']) / effort7_total['baseline_size_bytes']) * 100
+        
+        effort9_total_pixels = effort9_total['num_pixels']
+        effort9_baseline_bpp = (effort9_total['baseline_size_bytes'] * 8) / effort9_total_pixels
+        effort9_wop8_bpp = (effort9_total['wop8_size_bytes'] * 8) / effort9_total_pixels
+        effort9_bpp_improvement = effort9_baseline_bpp - effort9_wop8_bpp
+        effort9_improvement_percentage = ((effort9_total['baseline_size_bytes'] - effort9_total['wop8_size_bytes']) / effort9_total['baseline_size_bytes']) * 100
+        
+        # Create summary dataframe with both comparisons
+        summary_data = [
+            ['W-OP8 Compression Results Summary', '', '', ''],
+            ['', '', '', ''],
+            ['Part 1: Testing vs All Images (Predictor Mode 6)', '', '', ''],
+            ['Metric', 'Testing Set', 'All Images', ''],
+            ['', '', '', ''],
+            ['Dataset Statistics:', '', '', ''],
+            ['Images Count', len(test_df) - 1, len(all_df) - 1, ''],  # Subtract 1 for total row
+            ['Total Pixels', f"{test_total_pixels:,}", f"{all_total_pixels:,}", ''],
+            ['', '', '', ''],
+            ['Baseline Performance:', '', '', ''],
+            ['Total Size (bytes)', f"{test_total['baseline_size_bytes']:,}", f"{all_total['baseline_size_bytes']:,}", ''],
+            ['Bits per Pixel', f"{test_baseline_bpp:.4f}", f"{all_baseline_bpp:.4f}", ''],
+            ['', '', '', ''],
+            ['W-OP8 Performance:', '', '', ''],
+            ['Total Size (bytes)', f"{test_total['wop8_size_bytes']:,}", f"{all_total['wop8_size_bytes']:,}", ''],
+            ['Bits per Pixel', f"{test_wop8_bpp:.4f}", f"{all_wop8_bpp:.4f}", ''],
+            ['', '', '', ''],
+            ['Improvements:', '', '', ''],
+            ['Size Reduction (bytes)', f"{test_total['size_reduction_bytes']:,}", f"{all_total['size_reduction_bytes']:,}", ''],
+            ['Size Reduction (%)', f"{test_improvement_percentage:.4f}%", f"{all_improvement_percentage:.4f}%", ''],
+            ['Bits per Pixel Improvement', f"{test_bpp_improvement:.4f}", f"{all_bpp_improvement:.4f}", ''],
+            ['', '', '', ''],
+            ['Part 2: Effort Level Comparison (All Images)', '', '', ''],
+            ['Metric', 'Isolated (Predictor Mode 6)', 'Effort Level 7', 'Effort Level 9'],
+            ['', '', '', ''],
+            ['Dataset Statistics:', '', '', ''],
+            ['Images Count', len(all_df) - 1, len(effort7_df) - 1, len(effort9_df) - 1],
+            ['Total Pixels', f"{all_total_pixels:,}", f"{effort7_total_pixels:,}", f"{effort9_total_pixels:,}"],
+            ['', '', '', ''],
+            ['Baseline Performance:', '', '', ''],
+            ['Total Size (bytes)', f"{all_total['baseline_size_bytes']:,}", f"{effort7_total['baseline_size_bytes']:,}", f"{effort9_total['baseline_size_bytes']:,}"],
+            ['Bits per Pixel', f"{all_baseline_bpp:.4f}", f"{effort7_baseline_bpp:.4f}", f"{effort9_baseline_bpp:.4f}"],
+            ['', '', '', ''],
+            ['W-OP8 Performance:', '', '', ''],
+            ['Total Size (bytes)', f"{all_total['wop8_size_bytes']:,}", f"{effort7_total['wop8_size_bytes']:,}", f"{effort9_total['wop8_size_bytes']:,}"],
+            ['Bits per Pixel', f"{all_wop8_bpp:.4f}", f"{effort7_wop8_bpp:.4f}", f"{effort9_wop8_bpp:.4f}"],
+            ['', '', '', ''],
+            ['Improvements:', '', '', ''],
+            ['Size Reduction (bytes)', f"{all_total['size_reduction_bytes']:,}", f"{effort7_total['size_reduction_bytes']:,}", f"{effort9_total['size_reduction_bytes']:,}"],
+            ['Size Reduction (%)', f"{all_improvement_percentage:.4f}%", f"{effort7_improvement_percentage:.4f}%", f"{effort9_improvement_percentage:.4f}%"],
+            ['Bits per Pixel Improvement', f"{all_bpp_improvement:.4f}", f"{effort7_bpp_improvement:.4f}", f"{effort9_bpp_improvement:.4f}"],
+        ]
+        
+        # Convert to DataFrame
+        summary_df = pd.DataFrame(summary_data)
+        
+        # Write to Excel
+        with pd.ExcelWriter(excel_path, mode='a', if_sheet_exists='replace') as writer:
+            # Write summary sheet
+            summary_df.to_excel(writer, sheet_name='Summary', index=False, header=False)
+            
+            # Access the workbook and set column widths
+            worksheet = writer.sheets['Summary']
+            worksheet.column_dimensions['A'].width = 30
+            worksheet.column_dimensions['B'].width = 25
+            worksheet.column_dimensions['C'].width = 25
+            worksheet.column_dimensions['D'].width = 25
+            
+            # Style header row and section titles
+            from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+            
+            # Title styling
+            worksheet.cell(row=1, column=1).font = Font(bold=True, size=14)
+            worksheet.merge_cells('A1:D1')
+            worksheet.cell(row=1, column=1).alignment = Alignment(horizontal='center')
+            
+            # Part 1 title
+            worksheet.cell(row=3, column=1).font = Font(bold=True, size=12)
+            worksheet.merge_cells('A3:D3')
+            
+            # Part 1 header row
+            for col in range(1, 4):
+                cell = worksheet.cell(row=4, column=col)
+                cell.font = Font(bold=True)
+                cell.fill = PatternFill(start_color="D3D3D3", end_color="D3D3D3", fill_type="solid")
+                cell.alignment = Alignment(horizontal='center')
+            
+            # Part 2 title
+            worksheet.cell(row=23, column=1).font = Font(bold=True, size=12)
+            worksheet.merge_cells('A23:D23')
+            
+            # Part 2 header row (this is the important fix)
+            for col in range(1, 5):
+                cell = worksheet.cell(row=24, column=col)
+                cell.font = Font(bold=True)
+                cell.fill = PatternFill(start_color="D3D3D3", end_color="D3D3D3", fill_type="solid")
+                cell.alignment = Alignment(horizontal='center')
+            
+            # Style section headers for both parts
+            section_rows_part1 = [6, 10, 14, 18]
+            section_rows_part2 = [27, 31, 35, 39]
+            
+            for row in section_rows_part1 + section_rows_part2:
+                worksheet.cell(row=row, column=1).font = Font(bold=True)
+            
+            # Add thin borders to all cells
+            # thin_border = Border(
+            #     left=Side(style='thin'),
+            #     right=Side(style='thin'),
+            #     top=Side(style='thin'),
+            #     bottom=Side(style='thin')
+            # )
+            
+            for row in range(1, 43):  # Adjust based on actual content
+                for col in range(1, 5):
+                    cell = worksheet.cell(row=row, column=col)
+                    # cell.border = thin_border
+        
+        return True
+    except Exception as e:
+        print(f"Error updating summary with effort results: {e}")
         return False

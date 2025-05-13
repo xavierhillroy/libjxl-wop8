@@ -78,3 +78,54 @@ class WOP8Compression:
                 results[image_name] = result
         
         return results
+    
+    def compress_image_with_effort(self, input_path, output_path, effort=7, decompressed_path=None):
+        """
+        Compress an image using W-OP8 at specified effort level without predictor_mode.
+        
+        Args:
+            input_path (str): Path to input image
+            output_path (str): Path to save compressed image
+            effort (int): JPEG XL effort level (1-10)
+            decompressed_path (str, optional): Path to save decompressed image
+            
+        Returns:
+            dict: Dictionary with compression results
+        """
+        # We'll use the baseline_compressor's method but with our W-OP8 setup
+        return self.baseline_compressor.compress_image_with_effort(
+            input_path, output_path, effort, decompressed_path)
+
+    def compress_dataset_with_effort(self, image_paths, run_name, effort=7):
+        """
+        Compress a dataset using W-OP8 with a specific effort level.
+        
+        Args:
+            image_paths (list): List of paths to images
+            run_name (str): Name of the dataset
+            effort (int): JPEG XL effort level (1-10)
+            
+        Returns:
+            dict: Dictionary with compression results
+        """
+        # Set up output directories
+        compressed_dir = os.path.join(COMPRESSED_DIR, run_name, f'wop8_effort{effort}')
+        decompressed_dir = os.path.join(COMPRESSED_DIR, run_name, f'wop8_effort{effort}_decompressed')
+        
+        os.makedirs(compressed_dir, exist_ok=True)
+        os.makedirs(decompressed_dir, exist_ok=True)
+        
+        # Compress images
+        results = {}
+        
+        for input_path in tqdm(image_paths, desc=f"Compressing {run_name} with W-OP8 (effort {effort})"):
+            image_name = os.path.basename(input_path)
+            compressed_path = os.path.join(compressed_dir, f"{os.path.splitext(image_name)[0]}.jxl")
+            decompressed_path = os.path.join(decompressed_dir, image_name)
+            
+            # Use the effort-specific compression
+            result = self.compress_image_with_effort(input_path, compressed_path, effort, decompressed_path)
+            if result:
+                results[image_name] = result
+        
+        return results

@@ -191,7 +191,7 @@ def process_dataset(dataset_name, train_ratio=0.1, max_train_images=10, seed=42,
         
         # Step 7: Apply W-OP8 with best weights to all images
         if progress_callback:
-            progress_callback("wop8", "Applying W-OP8 compression...")
+            progress_callback("wop8", "Applying W-OP8 compression/ Applying Baseline and W-OP8 at different effort levels to all images...")
         wop8_results = apply_wop8_to_all_images(
             run_name=run_name,
             train_paths=train_paths,

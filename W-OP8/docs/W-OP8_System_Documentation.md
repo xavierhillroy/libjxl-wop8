@@ -454,7 +454,7 @@ data/output/stats/
 - uncompressed_size_bytes, baseline_size_bytes, baseline_bpp, baseline_mae
 - w{weights}_fitness, w{weights}_mae (for each GA candidate)
 
-**Testing Sheet**:
+**Testing, All Images and Effort LevelSheets**:
 - All training columns plus:
 - wop8_size_bytes, wop8_bpp, wop8_mae
 - size_reduction_bytes, bpp_improvement, improvement_percentage

@@ -133,6 +133,81 @@ class BaselineCompression:
             print(f"Error compressing image: {e}")
             return None
     
+    def compress_image_with_effort(self, input_path, output_path, effort=7, decompressed_path=None):
+        """
+        Compress an image using baseline JPEG XL with specified effort level and without predictor_mode.
+        
+        Args:
+            input_path (str): Path to input image
+            output_path (str): Path to save compressed image
+            effort (int): JPEG XL effort level (1-10)
+            decompressed_path (str, optional): Path to save decompressed image
+            
+        Returns:
+            dict: Dictionary with compression results
+                {
+                    'size': compressed size in bytes,
+                    'mae': MAE value if decompressed_path is provided
+                }
+        """
+        try:
+            # Ensure output directory exists
+            os.makedirs(os.path.dirname(output_path), exist_ok=True)
+            
+            # Compress image - note: no modular_predictor parameter
+            compress_cmd = [
+                self.cjxl_path,
+                input_path,
+                output_path,
+                "--distance=0",
+                f"--effort={effort}"
+            ]
+            
+            result = subprocess.run(
+                compress_cmd,
+                capture_output=True,
+                text=True,
+                check=False
+            )
+            
+            if result.returncode != 0:
+                print(f"Compression failed: {result.stderr}")
+                return None
+            
+            # Get compressed size
+            compressed_size = os.path.getsize(output_path)
+            
+            # If decompressed path is provided, decompress and calculate MAE
+            mae = None
+            if decompressed_path:
+                os.makedirs(os.path.dirname(decompressed_path), exist_ok=True)
+                
+                decompress_cmd = [
+                    self.djxl_path,
+                    output_path,
+                    decompressed_path
+                ]
+                
+                result = subprocess.run(
+                    decompress_cmd,
+                    capture_output=True,
+                    text=True,
+                    check=False
+                )
+                
+                if result.returncode != 0:
+                    print(f"Decompression failed: {result.stderr}")
+                else:
+                    mae = self.calculate_mae(input_path, decompressed_path)
+            
+            return {
+                'size': compressed_size,
+                'mae': mae
+            }
+        except Exception as e:
+            print(f"Error compressing image: {e}")
+            return None
+    
     def process_dataset(self, image_paths, run_name, decompress=True):
         """
         Process a list of images with baseline compression.
@@ -165,6 +240,39 @@ class BaselineCompression:
             decompressed_path = os.path.join(decompressed_dir, image_name) if decompress else None
             
             result = self.compress_image(input_path, compressed_path, decompressed_path)
+            if result:
+                results[image_name] = result
+        
+        return results
+    
+    def process_dataset_with_effort(self, image_paths, run_name, effort=7, decompress=True):
+        """
+        Process a list of images with baseline compression at specified effort level.
+        
+        Args:
+            image_paths (list): List of paths to input images
+            run_name (str): Name of the dataset (for organizing outputs)
+            effort (int): JPEG XL effort level (1-10)
+            decompress (bool): Whether to decompress images and calculate MAE
+            
+        Returns:
+            dict: Dictionary with compression results for each image
+        """
+        compressed_dir = os.path.join(COMPRESSED_DIR, run_name, f'baseline_effort{effort}')
+        decompressed_dir = os.path.join(COMPRESSED_DIR, run_name, f'baseline_effort{effort}_decompressed')
+        
+        os.makedirs(compressed_dir, exist_ok=True)
+        if decompress:
+            os.makedirs(decompressed_dir, exist_ok=True)
+        
+        results = {}
+        for input_path in tqdm(image_paths, desc=f"Compressing {run_name} with baseline (effort {effort})"):
+            image_name = os.path.basename(input_path)
+            
+            compressed_path = os.path.join(compressed_dir, f"{os.path.splitext(image_name)[0]}.jxl")
+            decompressed_path = os.path.join(decompressed_dir, image_name) if decompress else None
+            
+            result = self.compress_image_with_effort(input_path, compressed_path, effort, decompressed_path)
             if result:
                 results[image_name] = result
         
