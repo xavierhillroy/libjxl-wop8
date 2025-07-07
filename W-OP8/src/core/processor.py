@@ -13,7 +13,7 @@ from src.data_processing.validator import validate_directory
 from src.data_processing.partitioner import partition_dataset
 from src.data_processing.statistics import collect_statistics
 from src.reporting.spreadsheet import create_dataset_spreadsheet
-from src.compression.processor_wop8 import apply_wop8_to_testing
+
 from src.compression.processor_wop8 import apply_wop8_to_all_images
 
 
@@ -77,7 +77,8 @@ def process_dataset(dataset_name, train_ratio=0.1, max_train_images=10, seed=42,
         mutation_rate=mutation_rate,
         crossover_rate=crossover_rate,
         elitism_count=elitism_count,
-        tournament_size=tournament_size
+        tournament_size=tournament_size,
+        seed=seed
     )
     
     # Setup paths - use run_name for outputs
@@ -126,7 +127,6 @@ def process_dataset(dataset_name, train_ratio=0.1, max_train_images=10, seed=42,
     train_paths, test_paths = partition_dataset(
         valid_files, train_dir, test_dir, train_ratio, max_train_images, seed
     )
-    
     print(f"Partitioned into {len(train_paths)} training and {len(test_paths)} testing files")
     
     # Step 3: Collect statistics

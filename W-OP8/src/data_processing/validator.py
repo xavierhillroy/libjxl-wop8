@@ -57,10 +57,10 @@ def validate_directory(dir_path):
     
     return valid_files, invalid_files
 
-kodak_dataset_dir = os.path.join(INPUT_DIR, 'Kodak_Lossless_True_Color_Image_Suite')
-valid_files, invalid_files = validate_directory(kodak_dataset_dir)
+# kodak_dataset_dir = os.path.join(INPUT_DIR, 'Kodak_Lossless_True_Color_Image_Suite')
+# valid_files, invalid_files = validate_directory(kodak_dataset_dir)
 
-print(f"Found {len(valid_files)} valid PNG files")
-print(f"Found {len(invalid_files)} invalid files")
-for invalid_file in invalid_files:
-    print(invalid_file)
+# print(f"Found {len(valid_files)} valid PNG files")
+# print(f"Found {len(invalid_files)} invalid files")
+# for invalid_file in invalid_files:
+#     print(invalid_file)

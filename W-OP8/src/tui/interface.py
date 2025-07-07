@@ -268,7 +268,8 @@ Customize Genetic Algorithm settings:"""
             mutation_rate=self.settings['mutation_rate'],
             crossover_rate=self.settings['crossover_rate'],
             elitism_count=self.settings['elitism_count'],
-            tournament_size=self.settings['tournament_size']
+            tournament_size=self.settings['tournament_size'],
+            seed=self.settings['seed']
         )
         
         # Create layout for the running screen

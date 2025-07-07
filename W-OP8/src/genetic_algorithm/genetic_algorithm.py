@@ -216,54 +216,7 @@ class GeneticAlgorithm:
         self.processed_candidates = set()
         
         return True
-        # def update_spreadsheet(self):
-        # """
-        # Update the training spreadsheet with all evaluated candidates.
-        # Only adds candidates that haven't been previously added.
-        # """
-        # try:
-        #     # Read existing Excel file
-        #     train_df = pd.read_excel(self.excel_path, sheet_name='Training')
-            
-        #     # Prepare data for spreadsheet update
-        #     for candidate_tuple in self.processed_candidates:
-        #         candidate = list(candidate_tuple)
-        #         result = self.evaluation_cache[candidate_tuple]
-                
-        #         weights = result['weights']
-        #         weight_str = '_'.join(map(str, weights))
-        #         column_prefix = f"w{weight_str}"
-                
-        #         # Check if these columns already exist
-        #         if f"{column_prefix}_fitness" in train_df.columns:
-        #             continue  # Skip if already in spreadsheet
-                
-        #         # Add columns for this weight configuration (only fitness and MAE as requested)
-        #         train_df[f"{column_prefix}_fitness"] = None
-        #         train_df[f"{column_prefix}_mae"] = None
-                
-        #         # Fill data for each image
-        #         for img_name, img_result in result['results'].items():
-        #             size = img_result['size']
-        #             mae = img_result['mae']
-                    
-        #             # Update row for this image
-        #             mask = train_df['image_name'] == img_name
-        #             if any(mask):
-        #                 train_df.loc[mask, f"{column_prefix}_fitness"] = -size
-        #                 train_df.loc[mask, f"{column_prefix}_mae"] = mae
-            
-        #     # Write updated dataframe back to Excel
-        #     with pd.ExcelWriter(self.excel_path, mode='a', if_sheet_exists='replace') as writer:
-        #         train_df.to_excel(writer, sheet_name='Training', index=False)
-            
-        #     # Clear the processed candidates set after updating
-        #     self.processed_candidates = set()
-            
-        #     return True
-        # except Exception as e:
-        #     print(f"Error updating spreadsheet: {e}")
-        #     return False
+       
     
     def run(self, progress_callback=None):
         """

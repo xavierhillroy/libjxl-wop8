@@ -185,7 +185,7 @@ class ContextFileManager:
             # First, force a touch on the modified file to ensure timestamp changes
             # This helps make sure the build system recognizes the file changed
             current_time = time.time()
-            os.utime(self.context_file_path, (current_time, current_time))
+            os.utime(self.context_file_path, (current_time, current_time)) # forces rebuild
             
             # Run a clean build to ensure no caching issues
             if clean:
@@ -200,10 +200,12 @@ class ContextFileManager:
                 if clean_result.returncode != 0:
                     print(f"Clean failed: {clean_result.stderr}")
                     # Continue anyway since clean failure might be okay
+                else:
+                    print("Build Cleaned")
             
             # Now run the full rebuild
             result = subprocess.run(
-                ["ninja", "cjxl", "djxl"], 
+                ["ninja"], 
                 cwd=self.build_dir, 
                 capture_output=True,
                 text=True,

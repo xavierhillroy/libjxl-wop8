@@ -108,16 +108,12 @@ def create_dataset_spreadsheet(train_stats, test_stats, run_name):
             num_rows = len(train_df) if sheet_name == 'Training' else (len(test_df) if sheet_name == 'Testing' else len(all_df))
             worksheet.cell(row=num_rows+2, column=1, value="TOTAL")
             
-            # Add SUM formulas for size columns (bytes) and pixel columns
-            size_columns = ['E', 'F', 'I', 'L']  # uncompressed_size_bytes, baseline_size_bytes, wop8_size_bytes, size_reduction_bytes
+            # Add SUM formulas for baseline size columns (bytes) and pixel columns
+            size_columns = ['E']  # uncompressed_size_bytes, baseline_size_bytes
             pixel_columns = ['D']  # num_pixels
             
             # Calculate sums for both size and pixel columns
             for col in pixel_columns + size_columns:
-                # Skip WOP8 columns in training sheet
-                if (col in ['I', 'L']) and sheet_name == 'Training':
-                    continue
-                
                 column_index = ord(col) - ord('A') + 1
                 columns_in_sheet = len(train_columns) if sheet_name == 'Training' else len(test_columns)
                 
@@ -125,27 +121,11 @@ def create_dataset_spreadsheet(train_stats, test_stats, run_name):
                     formula = f"=SUM({col}2:{col}{num_rows+1})"
                     worksheet.cell(row=num_rows+2, column=column_index, value=formula)
             
-            # Add AVERAGE formulas for bpp columns
-            bpp_columns = ['G', 'J', 'M']  # baseline_bpp, wop8_bpp, bpp_improvement
-            for col in bpp_columns:
-                if (col in ['J', 'M']) and sheet_name == 'Training':
-                    continue
-                
-                column_index = ord(col) - ord('A') + 1
-                columns_in_sheet = len(train_columns) if sheet_name == 'Training' else len(test_columns)
-                
-                if column_index <= columns_in_sheet:
-                    formula = f"=AVERAGE({col}2:{col}{num_rows+1})"
-                    worksheet.cell(row=num_rows+2, column=column_index, value=formula)
-                
-            # Add AVERAGE formula for improvement percentage
-            if sheet_name != 'Training':
-                improvement_col = 'N'  # Column for improvement_percentage
-                column_index = ord(improvement_col) - ord('A') + 1
-                
-                if column_index <= len(test_columns):
-                    formula = f"=AVERAGE({improvement_col}2:{improvement_col}{num_rows+1})"
-                    worksheet.cell(row=num_rows+2, column=column_index, value=formula)
+            # Note: BPP calculations will be added later when baseline data is available
+            # through update_spreadsheet_with_baseline function
+            
+            # Note: MAE calculations will be added later when baseline data is available
+            # through update_spreadsheet_with_baseline function
     
     return excel_path
 
@@ -214,9 +194,11 @@ def update_spreadsheet_with_ga_candidate(excel_path, candidate, results):
                     total_data[col] = train_df[col].sum()
                 elif col.endswith('_mae'):
                     total_data[col] = train_df[col].mean()
-                elif col in ['num_pixels', 'uncompressed_size_bytes', 'baseline_size_bytes']:
+                elif col in ['num_pixels', 'uncompressed_size_bytes']:
                     total_data[col] = train_df[col].sum()
-                elif col in ['baseline_bpp']:
+                elif col in ['baseline_size_bytes'] and col in train_df.columns:
+                    total_data[col] = train_df[col].sum()
+                elif col in ['baseline_bpp'] and col in train_df.columns:
                     total_data[col] = train_df[col].mean()
                 else:
                     total_data[col] = None
@@ -483,14 +465,18 @@ def update_spreadsheet_with_baseline(excel_path, train_results, test_results):
         # Training totals
         if train_total is not None:
             # Calculate new totals
+            total_pixels = train_df['num_pixels'].sum()
+            total_baseline_size = train_df['baseline_size_bytes'].sum()
+            baseline_bpp_total = (total_baseline_size * 8) / total_pixels
+            
             train_total_row = pd.DataFrame({
                 'image_name': ['TOTAL'],
                 'width': [None],
                 'height': [None],
-                'num_pixels': [train_df['num_pixels'].sum()],
+                'num_pixels': [total_pixels],
                 'uncompressed_size_bytes': [train_df['uncompressed_size_bytes'].sum()],
-                'baseline_size_bytes': [train_df['baseline_size_bytes'].sum()],
-                'baseline_bpp': [train_df['baseline_bpp'].mean()],
+                'baseline_size_bytes': [total_baseline_size],
+                'baseline_bpp': [baseline_bpp_total],
                 'baseline_mae': [train_df['baseline_mae'].mean()]
             })
             # Add other columns that may exist
@@ -502,14 +488,18 @@ def update_spreadsheet_with_baseline(excel_path, train_results, test_results):
         # Testing totals
         if test_total is not None:
             # Calculate new totals
+            total_pixels = test_df['num_pixels'].sum()
+            total_baseline_size = test_df['baseline_size_bytes'].sum()
+            baseline_bpp_total = (total_baseline_size * 8) / total_pixels
+            
             test_total_row = pd.DataFrame({
                 'image_name': ['TOTAL'],
                 'width': [None],
                 'height': [None],
-                'num_pixels': [test_df['num_pixels'].sum()],
+                'num_pixels': [total_pixels],
                 'uncompressed_size_bytes': [test_df['uncompressed_size_bytes'].sum()],
-                'baseline_size_bytes': [test_df['baseline_size_bytes'].sum()],
-                'baseline_bpp': [test_df['baseline_bpp'].mean()],
+                'baseline_size_bytes': [total_baseline_size],
+                'baseline_bpp': [baseline_bpp_total],
                 'baseline_mae': [test_df['baseline_mae'].mean()]
             })
             # Add other columns that may exist
@@ -521,14 +511,18 @@ def update_spreadsheet_with_baseline(excel_path, train_results, test_results):
         # All images totals
         if all_total is not None:
             # Calculate new totals
+            total_pixels = all_df['num_pixels'].sum()
+            total_baseline_size = all_df['baseline_size_bytes'].sum()
+            baseline_bpp_total = (total_baseline_size * 8) / total_pixels
+            
             all_total_row = pd.DataFrame({
                 'image_name': ['TOTAL'],
                 'width': [None],
                 'height': [None],
-                'num_pixels': [all_df['num_pixels'].sum()],
+                'num_pixels': [total_pixels],
                 'uncompressed_size_bytes': [all_df['uncompressed_size_bytes'].sum()],
-                'baseline_size_bytes': [all_df['baseline_size_bytes'].sum()],
-                'baseline_bpp': [all_df['baseline_bpp'].mean()],
+                'baseline_size_bytes': [total_baseline_size],
+                'baseline_bpp': [baseline_bpp_total],
                 'baseline_mae': [all_df['baseline_mae'].mean()]
             })
             # Add other columns that may exist
@@ -571,23 +565,51 @@ def create_summary_sheet(excel_path):
         test_metrics = {
             'baseline_total_size': test_total['baseline_size_bytes'],
             'baseline_bpp': test_total['baseline_bpp'],
-            'wop8_total_size': test_total['wop8_size_bytes'],
-            'wop8_bpp': test_total['wop8_bpp'],
-            'size_reduction': test_total['size_reduction_bytes'],
-            'improvement_percentage': test_total['improvement_percentage'],
-            'bpp_improvement': test_total['bpp_improvement']
         }
+        
+        # Add W-OP8 metrics if they exist
+        if 'wop8_size_bytes' in test_total:
+            test_metrics.update({
+                'wop8_total_size': test_total['wop8_size_bytes'],
+                'wop8_bpp': test_total['wop8_bpp'],
+                'size_reduction': test_total['size_reduction_bytes'],
+                'improvement_percentage': test_total['improvement_percentage'],
+                'bpp_improvement': test_total['bpp_improvement']
+            })
+        else:
+            # Set default values if W-OP8 data doesn't exist
+            test_metrics.update({
+                'wop8_total_size': 'N/A',
+                'wop8_bpp': 'N/A',
+                'size_reduction': 'N/A',
+                'improvement_percentage': 'N/A',
+                'bpp_improvement': 'N/A'
+            })
         
         # Extract metrics from all images totals
         all_metrics = {
             'baseline_total_size': all_total['baseline_size_bytes'],
             'baseline_bpp': all_total['baseline_bpp'],
-            'wop8_total_size': all_total['wop8_size_bytes'],
-            'wop8_bpp': all_total['wop8_bpp'],
-            'size_reduction': all_total['size_reduction_bytes'],
-            'improvement_percentage': all_total['improvement_percentage'],
-            'bpp_improvement': all_total['bpp_improvement']
         }
+        
+        # Add W-OP8 metrics if they exist
+        if 'wop8_size_bytes' in all_total:
+            all_metrics.update({
+                'wop8_total_size': all_total['wop8_size_bytes'],
+                'wop8_bpp': all_total['wop8_bpp'],
+                'size_reduction': all_total['size_reduction_bytes'],
+                'improvement_percentage': all_total['improvement_percentage'],
+                'bpp_improvement': all_total['bpp_improvement']
+            })
+        else:
+            # Set default values if W-OP8 data doesn't exist
+            all_metrics.update({
+                'wop8_total_size': 'N/A',
+                'wop8_bpp': 'N/A',
+                'size_reduction': 'N/A',
+                'improvement_percentage': 'N/A',
+                'bpp_improvement': 'N/A'
+            })
         
         # Create summary dataframe
         summary_data = [
@@ -601,13 +623,13 @@ def create_summary_sheet(excel_path):
             ['Bits per Pixel', f"{test_metrics['baseline_bpp']:.3f}", f"{all_metrics['baseline_bpp']:.3f}"],
             ['', '', ''],
             ['W-OP8 Performance:', '', ''],
-            ['Total Size (bytes)', f"{test_metrics['wop8_total_size']:,}", f"{all_metrics['wop8_total_size']:,}"],
-            ['Bits per Pixel', f"{test_metrics['wop8_bpp']:.3f}", f"{all_metrics['wop8_bpp']:.3f}"],
+            ['Total Size (bytes)', str(test_metrics['wop8_total_size']), str(all_metrics['wop8_total_size'])],
+            ['Bits per Pixel', str(test_metrics['wop8_bpp']), str(all_metrics['wop8_bpp'])],
             ['', '', ''],
             ['Improvements:', '', ''],
-            ['Size Reduction (bytes)', f"{test_metrics['size_reduction']:,}", f"{all_metrics['size_reduction']:,}"],
-            ['Size Reduction (%)', f"{test_metrics['improvement_percentage']:.2f}%", f"{all_metrics['improvement_percentage']:.2f}%"],
-            ['Bits per Pixel Improvement', f"{test_metrics['bpp_improvement']:.3f}", f"{all_metrics['bpp_improvement']:.3f}"],
+            ['Size Reduction (bytes)', str(test_metrics['size_reduction']), str(all_metrics['size_reduction'])],
+            ['Size Reduction (%)', str(test_metrics['improvement_percentage']), str(all_metrics['improvement_percentage'])],
+            ['Bits per Pixel Improvement', str(test_metrics['bpp_improvement']), str(all_metrics['bpp_improvement'])],
         ]
         
         # Convert to DataFrame
@@ -984,13 +1006,7 @@ def update_summary_with_effort_results(excel_path):
             for row in section_rows_part1 + section_rows_part2:
                 worksheet.cell(row=row, column=1).font = Font(bold=True)
             
-            # Add thin borders to all cells
-            # thin_border = Border(
-            #     left=Side(style='thin'),
-            #     right=Side(style='thin'),
-            #     top=Side(style='thin'),
-            #     bottom=Side(style='thin')
-            # )
+  
             
             for row in range(1, 43):  # Adjust based on actual content
                 for col in range(1, 5):

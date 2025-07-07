@@ -84,7 +84,7 @@ class BaselineCompression:
                 input_path,
                 output_path,
                 "--distance=0",
-                "--modular_predictor=6",
+                # "--modular_predictor=6",
                 "--effort=7"
             ]
             

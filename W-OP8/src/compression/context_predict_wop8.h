@@ -200,7 +200,7 @@ struct State {
     else if (d_v - d_h > 8) gap_pred = (3 * gap_pred + W) / 4;
     else if (d_h - d_v > 8) gap_pred = (3 * gap_pred + N) / 4;
 
-    // 2. Adaptive Median predictor with error feedback
+    // 2. Adaptive MED predictor with error feedback _
     int error_const = 4;
     pixel_type_w adaptive_med_pred;
     if (NW >= std::max(N, W)) {
@@ -267,14 +267,14 @@ struct State {
 // Modified: Updated predictor weights with values optimized for medical images
 inline void PredictorMode(int i, Header *header) {
     // Set Optimized Weights - currently optimized for the kodak dataset
-const uint32_t w0 = 0x0;  // Original predictor weights
-const uint32_t w1 = 0x2;
-const uint32_t w2 = 0x7;
-const uint32_t w3 = 0x2;
-const uint32_t w4 = 0xe;  // Adaptive Median weight
-const uint32_t w5 = 0x0;  // Enhanced Adaptive Median weight
-const uint32_t w6 = 0xf;  // Paeth weight
-const uint32_t w7 = 0x1;  // GAP weight
+const uint32_t w0 = 0x8;  // Original predictor weights
+const uint32_t w1 = 0x0;
+const uint32_t w2 = 0x5;
+const uint32_t w3 = 0xd;
+const uint32_t w4 = 0xa;  // Adaptive MED weight
+const uint32_t w5 = 0x8;  // Enhanced Adaptive Median weight
+const uint32_t w6 = 0x4;  // Paeth weight
+const uint32_t w7 = 0x6;  // GAP weight
 
     switch (i) {
         case 0:

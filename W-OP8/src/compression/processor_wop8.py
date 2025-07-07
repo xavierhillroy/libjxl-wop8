@@ -10,10 +10,11 @@ from config import CONTEXT_PREDICT_PATH, BUILD_DIR, COMPRESSED_DIR
 from src.compression.wop8 import WOP8Compression
 from src.compression.baseline import BaselineCompression
 from src.reporting.spreadsheet import update_with_wop8_results
-from src.compression.context_manager import ContextFileManager
+
 
 def apply_wop8_to_testing(run_name, test_paths, excel_path, best_weights):
     """
+    LEGACY FUNCTION
     Apply W-OP8 compression with best weights to the testing set and update spreadsheet.
     
     Args:
@@ -102,7 +103,7 @@ def apply_different_effort_levels(run_name, all_paths, excel_path, best_weights)
     
     # Switch to original implementation
     setup_success = baseline_compressor.setup(clean=True)
-    print(f"Setup success!!!!!!!!!!!!!!: {setup_success}")
+    
     if not setup_success:
         print("Failed to set up Baseline for effort level comparisons")
         return None

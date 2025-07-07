@@ -66,24 +66,24 @@ def partition_dataset(source_files, train_dir, test_dir, train_ratio=0.1, max_tr
     
     return train_paths, test_paths
 
-if __name__ == "__main__":
-    # This is just for testing the partitioner directly
-    from validator import validate_directory
-    from config import INPUT_DIR
+# if __name__ == "__main__":
+#     # This is just for testing the partitioner directly
+#     from validator import validate_directory
+#     from config import INPUT_DIR
     
-    dataset_name = "Kodak_Lossless_True_Color_Image_Suite"
-    dataset_dir = os.path.join(INPUT_DIR, dataset_name)
+#     dataset_name = "Kodak_Lossless_True_Color_Image_Suite"
+#     dataset_dir = os.path.join(INPUT_DIR, dataset_name)
     
-    valid_files, _ = validate_directory(dataset_dir)
+#     valid_files, _ = validate_directory(dataset_dir)
     
-    if valid_files:
-        train_dir = os.path.join(TRAIN_DIR, dataset_name)
-        test_dir = os.path.join(TEST_DIR, dataset_name)
+#     if valid_files:
+#         train_dir = os.path.join(TRAIN_DIR, dataset_name)
+#         test_dir = os.path.join(TEST_DIR, dataset_name)
         
-        train_paths, test_paths = partition_dataset(valid_files, train_dir, test_dir,seed=1)
+#         train_paths, test_paths = partition_dataset(valid_files, train_dir, test_dir,seed=1)
         
-        print(f"Partitioned {len(valid_files)} files into:")
-        print(f"  - {len(train_paths)} training files ({train_dir})")
-        print(f"  - {len(test_paths)} testing files ({test_dir})")
-    else:
-        print(f"No valid PNG files found in {dataset_dir}")
+#         print(f"Partitioned {len(valid_files)} files into:")
+#         print(f"  - {len(train_paths)} training files ({train_dir})")
+#         print(f"  - {len(test_paths)} testing files ({test_dir})")
+#     else:
+#         print(f"No valid PNG files found in {dataset_dir}")
