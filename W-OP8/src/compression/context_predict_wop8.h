@@ -185,7 +185,6 @@ struct State {
                         teNE * header.p3Cc + (NN - N) * header.p3Cd + 
                         (NW - W) * header.p3Ce) >> 5);
 
-    // Modified: Added new medical image-specific predictors
     // 1. GAP (Gradient Adjusted Prediction) implementation
     pixel_type_w d_h = std::abs(N-NW) + std::abs(NE-N);
     pixel_type_w d_v = std::abs(W-NW) + std::abs(N-NN);

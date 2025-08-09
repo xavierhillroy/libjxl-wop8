@@ -74,9 +74,24 @@ class GeneticAlgorithm:
         if not success:
             raise RuntimeError("Failed to switch to W-OP8 implementation")
         
+        # Get modification time before rebuild
+        cjxl_path = os.path.join(BUILD_DIR, 'tools', 'cjxl')
+        if os.path.exists(cjxl_path):
+            pre_rebuild_time = os.path.getmtime(cjxl_path)
+        else:
+            pre_rebuild_time = 0
+        
         success = self.context_manager.rebuild_library()
         if not success:
             raise RuntimeError("Failed to rebuild library with W-OP8 implementation")
+        
+        # Verify the binary was actually rebuilt
+        if os.path.exists(cjxl_path):
+            post_rebuild_time = os.path.getmtime(cjxl_path)
+            if post_rebuild_time <= pre_rebuild_time:
+                print("Warning: Binary modification time unchanged - rebuild may have failed")
+        else:
+            raise RuntimeError("cjxl binary not found after rebuild")
     
     def _create_candidate(self):
         """Create a random candidate with weights between min_weight and max_weight"""
@@ -127,10 +142,13 @@ class GeneticAlgorithm:
             # Compress image
             result = self.compressor.compress_image(input_path, compressed_path, decompressed_path)
             if result is None:
-                continue
-                
-            size = result['size']
-            mae = result['mae']
+                print(f"Warning: Compression failed for {image_name} with weights {candidate}")
+                # Use a penalty for failed compressions instead of skipping
+                size = float('inf')
+                mae = float('inf')
+            else:
+                size = result['size']
+                mae = result['mae']
             
             total_size += size
             image_results[image_name] = {'size': size, 'mae': mae}
@@ -157,8 +175,13 @@ class GeneticAlgorithm:
         """
         Select an individual using tournament selection.
         """
+        # Ensure tournament size doesn't exceed population size
+        actual_tournament_size = min(self.tournament_size, len(population))
+        if actual_tournament_size == 0:
+            return population[0]  # Return first individual if population is empty
+        
         # Randomly select tournament_size individuals
-        tournament_indices = random.sample(range(len(population)), self.tournament_size)
+        tournament_indices = random.sample(range(len(population)), actual_tournament_size)
         tournament = [(population[i], fitnesses[i]) for i in tournament_indices]
         
         # Select the best individual from the tournament
@@ -291,6 +314,10 @@ class GeneticAlgorithm:
                 if len(next_population) < self.population_size:
                     next_population.append(child2)
             
+            # Ensure population size is correct (in case of odd numbers)
+            if len(next_population) > self.population_size:
+                next_population = next_population[:self.population_size]
+            
             # Update population for next generation
             population = next_population
             
@@ -326,7 +353,20 @@ class GeneticAlgorithm:
         
         # Save final best weights to W-OP8 implementation
         if best_candidate:
-            self.context_manager.update_wop8_weights(best_candidate)
+            # Update weights in context_predict.h
+            success = self.context_manager.update_wop8_weights(best_candidate)
+            if not success:
+                print(f"Warning: Failed to update final weights: {best_candidate}")
+            else:
+                print(f"Successfully updated context_predict.h with best weights: {best_candidate}")
+            
+            # Rebuild library with best weights
+            success = self.context_manager.rebuild_library()
+            if not success:
+                print(f"Warning: Failed to rebuild library with best weights")
+            else:
+                print(f"Successfully rebuilt library with best weights")
+            
             print(f"Final best weights: {best_candidate} (Fitness: {best_fitness})")
             
             # Save best candidate to a file
@@ -335,8 +375,16 @@ class GeneticAlgorithm:
                 json.dump({
                     'weights': best_candidate,
                     'fitness': best_fitness,
-                    'total_size': -best_fitness
+                    'total_size': -best_fitness,
+                    'timestamp': datetime.now().isoformat()
                 }, f, indent=2)
+            print(f"Best weights saved to: {best_candidate_path}")
+        else:
+            print("Warning: No best candidate found - weights not saved")
+        
+        # Verify that the best weights are actually in the context file
+        if best_candidate:
+            self._verify_weights_stored(best_candidate)
         
         return {
             'best_candidate': best_candidate,
@@ -344,14 +392,42 @@ class GeneticAlgorithm:
             'total_size': -best_fitness if best_fitness != float('-inf') else float('inf')
         }
     
+    def _verify_weights_stored(self, expected_weights):
+        """Verify that the expected weights are actually stored in the context file"""
+        try:
+            import re
+            with open(self.context_manager.context_file_path, 'r') as f:
+                content = f.read()
+            
+            # Check for each weight in the file
+            for i, weight in enumerate(expected_weights):
+                # Look for the weight pattern in the file (const uint32_t w0 = 0x8;)
+                weight_hex = hex(weight)[2:]  # Convert to hex without '0x'
+                pattern = rf'const\s+uint32_t\s+w{i}\s*=\s*0x{weight_hex}'
+                if not re.search(pattern, content):
+                    print(f"Warning: Weight {i} ({weight}) not found in context file")
+                    print(f"Looking for pattern: const uint32_t w{i} = 0x{weight_hex}")
+                    return False
+            
+            print("✓ All weights verified in context file")
+            return True
+        except Exception as e:
+            print(f"Error verifying weights: {e}")
+            return False
+    
     def _save_results(self, generation):
         """Save intermediate results to a file"""
         results_path = os.path.join(STATS_DIR, f"{self.run_name}_ga_results.json")
+        
+        # Find the best candidate from the current generation
+        current_gen_candidates = self.generation_results[-1]['candidates']
+        best_candidate_data = max(current_gen_candidates, key=lambda x: x['fitness'])
+        
         with open(results_path, 'w') as f:
             json.dump({
                 'run_name': self.run_name,
                 'generations_completed': generation + 1,
-                'best_candidate': self.generation_results[-1]['candidates'][0]['weights'],
-                'best_fitness': self.generation_results[-1]['candidates'][0]['fitness'],
+                'best_candidate': best_candidate_data['weights'],
+                'best_fitness': best_candidate_data['fitness'],
                 'generation_results': self.generation_results
             }, f, indent=2)

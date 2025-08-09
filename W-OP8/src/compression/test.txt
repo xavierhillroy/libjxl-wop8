@@ -1,0 +1,305 @@
+I'll walk through the processor file step by step, explaining each function call and the flow of data through Step 5. Let me break this down comprehensively:
+
+## **Step-by-Step Flow Analysis (Steps 1-5)**
+
+### **Step 1: Validate PNG Files**
+
+```python
+valid_files, invalid_files = validate_directory(dataset_dir)
+```
+
+**What happens:**
+1. **Input**: `dataset_dir` (e.g., `/Users/xavier/input/kodak`)
+2. **Function**: `validate_directory()` scans the directory
+3. **Process**: 
+   - Lists all files in the directory
+   - Checks each file's extension and magic bytes
+   - Validates it's actually a PNG file (not just renamed)
+4. **Output**: 
+   - `valid_files`: List of full paths to valid PNG files
+   - `invalid_files`: List of paths to non-PNG files
+5. **Error handling**: If no valid files found, returns error
+
+**Example output:**
+```python
+valid_files = [
+    '/Users/xavier/input/kodak/kodim01.png',
+    '/Users/xavier/input/kodak/kodim02.png',
+    # ... 24 total files
+]
+invalid_files = []  # Empty if all files are valid
+```
+
+### **Step 2: Partition Dataset**
+
+```python
+train_paths, test_paths = partition_dataset(
+    valid_files, train_dir, test_dir, train_ratio, max_train_images, seed
+)
+```
+
+**What happens:**
+1. **Input**: 
+   - `valid_files`: List of all PNG paths
+   - `train_dir`: `/Users/xavier/train/run_name/`
+   - `test_dir`: `/Users/xavier/test/run_name/`
+   - `train_ratio`: 0.1 (10% for training)
+   - `max_train_images`: 10 (maximum training images)
+   - `seed`: 42 (for reproducible splits)
+
+2. **Process**:
+   - Shuffles files using the seed
+   - Calculates how many to use for training: `min(len(files) * 0.1, 10)`
+   - Splits into training and testing lists
+   - **Copies files** to respective directories
+   - Clears output directories first (deletes existing files)
+
+3. **Output**:
+   - `train_paths`: List of paths to copied training images
+   - `test_paths`: List of paths to copied testing images
+
+**Example output:**
+```python
+train_paths = [
+    '/Users/xavier/train/run_name/kodim01.png',
+    '/Users/xavier/train/run_name/kodim02.png',
+    # ... 10 training images
+]
+test_paths = [
+    '/Users/xavier/test/run_name/kodim11.png',
+    '/Users/xavier/test/run_name/kodim12.png',
+    # ... 14 testing images
+]
+```
+
+### **Step 3: Collect Statistics**
+
+```python
+train_stats = collect_statistics(train_paths)
+test_stats = collect_statistics(test_paths)
+```
+
+**What happens:**
+1. **Input**: Lists of image paths
+2. **Process**: For each image:
+   - Opens PNG with PIL
+   - Gets width, height
+   - Calculates `num_pixels = width * height`
+   - Gets file size in bytes
+   - Creates statistics dictionary
+
+3. **Output**: Lists of dictionaries with image statistics
+
+**Example output:**
+```python
+train_stats = [
+    {
+        'image_name': 'kodim01.png',
+        'width': 768,
+        'height': 512,
+        'num_pixels': 393216,
+        'uncompressed_size_bytes': 1179648
+    },
+    # ... 10 training images
+]
+
+test_stats = [
+    {
+        'image_name': 'kodim11.png',
+        'width': 512,
+        'height': 768,
+        'num_pixels': 393216,
+        'uncompressed_size_bytes': 1179648
+    },
+    # ... 14 testing images
+]
+```
+
+### **Step 4: Create Spreadsheet**
+
+```python
+excel_path = create_dataset_spreadsheet(train_stats, test_stats, run_name)
+```
+
+**What happens:**
+1. **Input**: Statistics from Step 3
+2. **Process**:
+   - Creates `SPREADSHEETS_DIR` if it doesn't exist
+   - Generates Excel file path: `spreadsheets/run_name_results.xlsx`
+   - Creates 5 sheets: Training, Testing, All Images, Effort Level 7, Effort Level 9
+   - Each sheet has columns for image data and compression results
+   - Adds TOTAL rows with SUM formulas for numerical columns
+
+3. **Output**: Path to created Excel file
+
+**Excel Structure Created:**
+```
+Training Sheet:
+| image_name | width | height | num_pixels | uncompressed_size_bytes | baseline_size_bytes | baseline_bpp | baseline_mae |
+| kodim01.png| 768   | 512    | 393216     | 1179648                | (empty)            | (empty)      | (empty)      |
+| TOTAL      | (SUM) | (SUM)  | =SUM(D2:D11)| =SUM(E2:E11)          | (empty)            | (empty)      | (empty)      |
+
+Testing Sheet:
+| image_name | width | height | num_pixels | uncompressed_size_bytes | baseline_size_bytes | baseline_bpp | baseline_mae | wop8_size_bytes | wop8_bpp | wop8_mae | size_reduction_bytes | bpp_improvement | improvement_percentage |
+| kodim11.png| 512   | 768    | 393216     | 1179648                | (empty)            | (empty)      | (empty)      | (empty)         | (empty)  | (empty)  | (empty)             | (empty)         | (empty)                |
+| TOTAL      | (SUM) | (SUM)  | =SUM(D2:D15)| =SUM(E2:E15)          | (empty)            | (empty)      | (empty)      | (empty)         | (empty)  | (empty)  | (empty)             | (empty)         | (empty)                |
+
+All Images Sheet: (same structure as Testing)
+Effort Level 7 Sheet: (same structure as Testing)
+Effort Level 9 Sheet: (same structure as Testing)
+```
+
+### **Step 5: Run ALL Baseline Compressions**
+
+This is the most complex step. Let me break it down:
+
+#### **5a: Setup Baseline Compression**
+
+```python
+compressor = BaselineCompression()
+compressor.setup(clean=True)
+```
+
+**What happens:**
+1. **Creates `BaselineCompression` object**:
+   - Sets paths to `cjxl` and `djxl` binaries
+   - Creates `ContextFileManager` for handling `context_predict.h`
+
+2. **`setup(clean=True)`**:
+   - Ensures original and W-OP8 versions of `context_predict.h` exist
+   - Switches to **original JPEG XL implementation**
+   - Runs `ninja clean` to remove all build artifacts
+   - Runs `ninja` to rebuild the entire JPEG XL library
+   - Verifies the binary was actually rebuilt
+
+**Output**: JPEG XL library compiled with original weights, ready for baseline compression
+
+#### **5b: Compress Training Set**
+
+```python
+train_results = compressor.process_dataset(train_paths, run_name)
+```
+
+**What happens:**
+1. **Creates directories**:
+   - `compressed/run_name/baseline/` (for .jxl files)
+   - `compressed/run_name/baseline_decompressed/` (for decompressed PNGs)
+
+2. **For each training image**:
+   - Runs: `cjxl input.png output.jxl --distance=0 --modular_predictor=6 --effort=7`
+   - Gets compressed file size
+   - Decompresses: `djxl output.jxl decompressed.png`
+   - Calculates MAE between original and decompressed
+   - Stores results
+
+3. **Output**: Dictionary mapping image names to compression results
+
+**Example output:**
+```python
+train_results = {
+    'kodim01.png': {
+        'size': 45678,  # compressed size in bytes
+        'mae': 0.0234   # mean absolute error
+    },
+    'kodim02.png': {
+        'size': 52341,
+        'mae': 0.0187
+    },
+    # ... 10 training images
+}
+```
+
+#### **5c: Compress Testing Set**
+
+```python
+test_results = compressor.process_dataset(test_paths, run_name)
+```
+
+**Same process as training set, but for testing images**
+
+**Example output:**
+```python
+test_results = {
+    'kodim11.png': {
+        'size': 48923,
+        'mae': 0.0211
+    },
+    # ... 14 testing images
+}
+```
+
+#### **5d: Compress ALL Images at Effort Level 7**
+
+```python
+all_paths = train_paths + test_paths
+baseline_effort7 = compressor.process_dataset_with_effort(all_paths, run_name, effort=7)
+```
+
+**What happens:**
+1. **Creates directories**:
+   - `compressed/run_name/baseline_effort7/`
+   - `compressed/run_name/baseline_effort7_decompressed/`
+
+2. **For each image**:
+   - Runs: `cjxl input.png output.jxl --distance=0 --effort=7`
+   - **Note**: No `--modular_predictor=6` parameter (uses default predictor)
+   - Gets compressed size and MAE
+
+3. **Output**: Dictionary with compression results for all 24 images
+
+#### **5e: Compress ALL Images at Effort Level 9**
+
+```python
+baseline_effort9 = compressor.process_dataset_with_effort(all_paths, run_name, effort=9)
+```
+
+**Same as effort 7, but with `--effort=9`**
+
+#### **5f: Update Spreadsheet with ALL Baseline Results**
+
+```python
+update_spreadsheet_with_baseline(excel_path, train_results, test_results)
+update_with_effort_results(excel_path, {
+    'effort7': {'baseline': baseline_effort7, 'wop8': {}},
+    'effort9': {'baseline': baseline_effort9, 'wop8': {}}
+})
+```
+
+**What happens:**
+
+1. **`update_spreadsheet_with_baseline()`**:
+   - Reads Training, Testing, and All Images sheets
+   - Updates each image row with baseline compression results
+   - Calculates BPP: `(compressed_size * 8) / num_pixels`
+   - Recalculates TOTAL rows with correct BPP formulas
+   - Writes updated sheets back to Excel
+
+2. **`update_with_effort_results()`**:
+   - Reads Effort Level 7 and 9 sheets
+   - Updates baseline results for effort levels
+   - Calculates BPP and other metrics
+   - Recalculates TOTAL rows
+   - Writes updated sheets back to Excel
+
+**Final Excel State After Step 5:**
+```
+Training Sheet: (now has baseline_size_bytes, baseline_bpp, baseline_mae filled)
+Testing Sheet: (now has baseline_size_bytes, baseline_bpp, baseline_mae filled)
+All Images Sheet: (now has baseline_size_bytes, baseline_bpp, baseline_mae filled)
+Effort Level 7 Sheet: (now has baseline_size_bytes, baseline_bpp, baseline_mae filled)
+Effort Level 9 Sheet: (now has baseline_size_bytes, baseline_bpp, baseline_mae filled)
+```
+
+**Key Files Created:**
+- Excel spreadsheet with 5 sheets containing baseline compression data
+- Compressed .jxl files in multiple directories
+- Decompressed PNG files for MAE calculation
+- JPEG XL library compiled with original weights
+
+**Data Flow Summary:**
+```
+PNG Files → Validation → Partitioning → Statistics Collection → 
+Excel Creation → Baseline Compression → Excel Update with Results
+```
+
+This completes the comprehensive baseline setup phase, with all compression results stored in the Excel spreadsheet and ready for GA optimization in Step 6.

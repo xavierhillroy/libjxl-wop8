@@ -19,7 +19,7 @@ from src.compression.processor_wop8 import apply_wop8_to_all_images
 
 # Import baseline compression functionality
 from src.compression.baseline import BaselineCompression
-from src.reporting.spreadsheet import update_spreadsheet_with_baseline
+from src.reporting.spreadsheet import update_spreadsheet_with_baseline, update_with_effort_results
 
 # Import GA optimization functionality
 from src.genetic_algorithm.optimizer import optimize_weights
@@ -138,31 +138,40 @@ def process_dataset(dataset_name, train_ratio=0.1, max_train_images=10, seed=42,
     print("Creating spreadsheet...")
     excel_path = create_dataset_spreadsheet(train_stats, test_stats, run_name)
     
-    # Step 5: Run baseline compression
+    # Step 5: Run ALL baseline compressions at once
     if progress_callback:
-        progress_callback("baseline", "Running baseline compression...")
+        progress_callback("baseline", "Running baseline compression at all effort levels...")
+ 
     print("Setting up baseline compression...")
     compressor = BaselineCompression()
-    
-    if not compressor.setup(clean=True):
-        return {
-            'status': 'error',
-            'message': 'Failed to set up baseline compression',
-            'dataset': dataset_name,
-            'run_name': run_name
-        }
-    
-    # Compress training set - use run_name
-    print("Compressing training set...")
+
+    if not compressor.setup(clean=True):  # Compile original once
+        return {'status': 'error', 'message': 'Failed to set up baseline compression'}
+
+    # Compress training set (for GA comparison)
+    print("Compressing training set with baseline...")
     train_results = compressor.process_dataset(train_paths, run_name)
-    
-    # Compress testing set - use run_name
-    print("Compressing testing set...")
+
+    # Compress testing set (for final comparison)
+    print("Compressing testing set with baseline...")
     test_results = compressor.process_dataset(test_paths, run_name)
-    
-    # Update spreadsheet with baseline results
+
+    # Compress ALL images at effort level 7 (no predictor mode)
+    print("Compressing all images with baseline effort 7...")
+    all_paths = train_paths + test_paths
+    baseline_effort7 = compressor.process_dataset_with_effort(all_paths, run_name, effort=7)
+
+    # Compress ALL images at effort level 9 (no predictor mode)
+    print("Compressing all images with baseline effort 9...")
+    baseline_effort9 = compressor.process_dataset_with_effort(all_paths, run_name, effort=9)
+
+    # Update spreadsheet with ALL baseline results
     print("Updating spreadsheet with baseline results...")
     update_spreadsheet_with_baseline(excel_path, train_results, test_results)
+    update_with_effort_results(excel_path, {
+        'effort7': {'baseline': baseline_effort7, 'wop8': {}},
+        'effort9': {'baseline': baseline_effort9, 'wop8': {}}
+    })
     
     # Step 6: Run GA optimization (if requested)
     ga_results = None
@@ -191,7 +200,7 @@ def process_dataset(dataset_name, train_ratio=0.1, max_train_images=10, seed=42,
         
         # Step 7: Apply W-OP8 with best weights to all images
         if progress_callback:
-            progress_callback("wop8", "Applying W-OP8 compression/ Applying Baseline and W-OP8 at different effort levels to all images...")
+            progress_callback("wop8", "Applying W-OP8 compression at different effort levels to all images...")
         wop8_results = apply_wop8_to_all_images(
             run_name=run_name,
             train_paths=train_paths,
@@ -202,31 +211,7 @@ def process_dataset(dataset_name, train_ratio=0.1, max_train_images=10, seed=42,
         
         if wop8_results:
             print("\nW-OP8 compression complete!")
-            
-            # Calculate improvements on the testing set
-            test_baseline_size = sum(result['size'] for name, result in test_results.items())
-            test_wop8_size = sum(result['size'] for name, result in wop8_results['test_results'].items())
-            test_improvement = test_baseline_size - test_wop8_size
-            test_improvement_percent = (test_improvement / test_baseline_size) * 100
-            
-            print(f"\nResults on Testing Set ({len(test_paths)} images):")
-            print(f"Baseline size: {test_baseline_size:,} bytes")
-            print(f"W-OP8 size: {test_wop8_size:,} bytes")
-            print(f"Size reduction: {test_improvement:,} bytes ({test_improvement_percent:.2f}%)")
-            
-            # Calculate overall improvements (all images)
-            all_baseline_size = (
-                sum(result['size'] for name, result in test_results.items()) + 
-                sum(result['size'] for name, result in train_results.items())
-            )
-            all_wop8_size = sum(result['size'] for name, result in wop8_results['all_results'].items())
-            all_improvement = all_baseline_size - all_wop8_size
-            all_improvement_percent = (all_improvement / all_baseline_size) * 100
-            
-            print(f"\nResults on All Images ({len(train_paths) + len(test_paths)} images):")
-            print(f"Baseline size: {all_baseline_size:,} bytes")
-            print(f"W-OP8 size: {all_wop8_size:,} bytes")
-            print(f"Size reduction: {all_improvement:,} bytes ({all_improvement_percent:.2f}%)")
+            print(f"Results saved to spreadsheet: {excel_path}")
         else:
             print("Failed to apply W-OP8 compression")
     

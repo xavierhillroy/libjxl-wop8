@@ -30,6 +30,7 @@ class WOP8Compression:
         Returns:
             bool: True if successful, False otherwise
         """
+        print(f"[W-OP8] Using weights: {best_weights}")
         # Ensure versions exist
         self.context_manager.ensure_versions_exist()
         
