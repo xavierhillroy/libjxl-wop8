@@ -81,29 +81,30 @@ def create_dataset_spreadsheet(train_stats, test_stats, run_name):
     # Ensure columns are in the right order
     all_df = all_df[test_columns]
     
-    # Create effort level sheets with the same structure as All Images
-    effort7_df = pd.DataFrame(all_stats)
-    effort9_df = pd.DataFrame(all_stats)
+    # # Create effort level sheets with the same structure as All Images
+    # effort7_df = pd.DataFrame(all_stats)
+    # effort9_df = pd.DataFrame(all_stats)
     
-    for col in test_columns:
-        if col not in effort7_df.columns:
-            effort7_df[col] = None
-            effort9_df[col] = None
+    # for col in test_columns:
+    #     if col not in effort7_df.columns:
+    #         effort7_df[col] = None
+    #         effort9_df[col] = None
     
-    # Ensure columns are in the right order
-    effort7_df = effort7_df[test_columns]
-    effort9_df = effort9_df[test_columns]
+    # # Ensure columns are in the right order
+    # effort7_df = effort7_df[test_columns]
+    # effort9_df = effort9_df[test_columns]
     
     # Write to Excel file with multiple sheets
     with pd.ExcelWriter(excel_path) as writer:
         train_df.to_excel(writer, sheet_name='Training', index=False)
         test_df.to_excel(writer, sheet_name='Testing', index=False)
         all_df.to_excel(writer, sheet_name='All Images', index=False)
-        effort7_df.to_excel(writer, sheet_name='Effort Level 7', index=False)
-        effort9_df.to_excel(writer, sheet_name='Effort Level 9', index=False)
+        # effort7_df.to_excel(writer, sheet_name='Effort Level 7', index=False)
+        # effort9_df.to_excel(writer, sheet_name='Effort Level 9', index=False)
         
         # Add a totals row to each sheet
-        for sheet_name in ['Training', 'Testing', 'All Images', 'Effort Level 7', 'Effort Level 9']:
+        # for sheet_name in ['Training', 'Testing', 'All Images', 'Effort Level 7', 'Effort Level 9']:
+        for sheet_name in ['Training', 'Testing', 'All Images']:
             worksheet = writer.sheets[sheet_name]
             num_rows = len(train_df) if sheet_name == 'Training' else (len(test_df) if sheet_name == 'Testing' else len(all_df))
             worksheet.cell(row=num_rows+2, column=1, value="TOTAL")
@@ -544,7 +545,8 @@ def update_spreadsheet_with_baseline(excel_path, train_results, test_results):
 
 def create_summary_sheet(excel_path):
     """
-    Create a summary sheet with key metrics comparing baseline and W-OP8 performance.
+    Create a summary sheet with key metrics comparing baseline and W-OP8 performance
+    for predictor mode 6 (testing vs all images).
     
     Args:
         excel_path (str): Path to the Excel file
@@ -561,108 +563,94 @@ def create_summary_sheet(excel_path):
         test_total = test_df[test_df['image_name'] == 'TOTAL'].iloc[0]
         all_total = all_df[all_df['image_name'] == 'TOTAL'].iloc[0]
         
-        # Extract metrics from testing set totals
-        test_metrics = {
-            'baseline_total_size': test_total['baseline_size_bytes'],
-            'baseline_bpp': test_total['baseline_bpp'],
-        }
+        # Calculate BPP correctly from totals (bytes*8/pixels)
+        test_total_pixels = test_total['num_pixels']
+        test_baseline_bpp = (test_total['baseline_size_bytes'] * 8) / test_total_pixels
+        all_total_pixels = all_total['num_pixels']
+        all_baseline_bpp = (all_total['baseline_size_bytes'] * 8) / all_total_pixels
         
-        # Add W-OP8 metrics if they exist
-        if 'wop8_size_bytes' in test_total:
-            test_metrics.update({
-                'wop8_total_size': test_total['wop8_size_bytes'],
-                'wop8_bpp': test_total['wop8_bpp'],
-                'size_reduction': test_total['size_reduction_bytes'],
-                'improvement_percentage': test_total['improvement_percentage'],
-                'bpp_improvement': test_total['bpp_improvement']
-            })
-        else:
-            # Set default values if W-OP8 data doesn't exist
-            test_metrics.update({
-                'wop8_total_size': 'N/A',
-                'wop8_bpp': 'N/A',
-                'size_reduction': 'N/A',
-                'improvement_percentage': 'N/A',
-                'bpp_improvement': 'N/A'
-            })
-        
-        # Extract metrics from all images totals
-        all_metrics = {
-            'baseline_total_size': all_total['baseline_size_bytes'],
-            'baseline_bpp': all_total['baseline_bpp'],
-        }
-        
-        # Add W-OP8 metrics if they exist
-        if 'wop8_size_bytes' in all_total:
-            all_metrics.update({
-                'wop8_total_size': all_total['wop8_size_bytes'],
-                'wop8_bpp': all_total['wop8_bpp'],
-                'size_reduction': all_total['size_reduction_bytes'],
-                'improvement_percentage': all_total['improvement_percentage'],
-                'bpp_improvement': all_total['bpp_improvement']
-            })
-        else:
-            # Set default values if W-OP8 data doesn't exist
-            all_metrics.update({
-                'wop8_total_size': 'N/A',
-                'wop8_bpp': 'N/A',
-                'size_reduction': 'N/A',
-                'improvement_percentage': 'N/A',
-                'bpp_improvement': 'N/A'
-            })
-        
-        # Create summary dataframe
+        # Create summary dataframe - only testing vs all images
         summary_data = [
+            ['W-OP8 Compression Results Summary (Predictor Mode 6)', '', ''],
+            ['', '', ''],
             ['Metric', 'Testing Set', 'All Images'],
             ['', '', ''],
             ['Dataset Statistics:', '', ''],
             ['Images Count', len(test_df) - 1, len(all_df) - 1],  # Subtract 1 for total row
+            ['Total Pixels', f"{test_total_pixels:,}", f"{all_total_pixels:,}"],
             ['', '', ''],
             ['Baseline Performance:', '', ''],
-            ['Total Size (bytes)', f"{test_metrics['baseline_total_size']:,}", f"{all_metrics['baseline_total_size']:,}"],
-            ['Bits per Pixel', f"{test_metrics['baseline_bpp']:.3f}", f"{all_metrics['baseline_bpp']:.3f}"],
-            ['', '', ''],
-            ['W-OP8 Performance:', '', ''],
-            ['Total Size (bytes)', str(test_metrics['wop8_total_size']), str(all_metrics['wop8_total_size'])],
-            ['Bits per Pixel', str(test_metrics['wop8_bpp']), str(all_metrics['wop8_bpp'])],
-            ['', '', ''],
-            ['Improvements:', '', ''],
-            ['Size Reduction (bytes)', str(test_metrics['size_reduction']), str(all_metrics['size_reduction'])],
-            ['Size Reduction (%)', str(test_metrics['improvement_percentage']), str(all_metrics['improvement_percentage'])],
-            ['Bits per Pixel Improvement', str(test_metrics['bpp_improvement']), str(all_metrics['bpp_improvement'])],
+            ['Total Size (bytes)', f"{test_total['baseline_size_bytes']:,}", f"{all_total['baseline_size_bytes']:,}"],
+            ['Bits per Pixel', f"{test_baseline_bpp:.4f}", f"{all_baseline_bpp:.4f}"],
         ]
+        
+        # Add W-OP8 results if they exist
+        if 'wop8_size_bytes' in test_total and pd.notna(test_total['wop8_size_bytes']):
+            test_wop8_bpp = (test_total['wop8_size_bytes'] * 8) / test_total_pixels
+            all_wop8_bpp = (all_total['wop8_size_bytes'] * 8) / all_total_pixels
+            test_bpp_improvement = test_baseline_bpp - test_wop8_bpp
+            all_bpp_improvement = all_baseline_bpp - all_wop8_bpp
+            test_improvement_percentage = ((test_total['baseline_size_bytes'] - test_total['wop8_size_bytes']) / test_total['baseline_size_bytes']) * 100
+            all_improvement_percentage = ((all_total['baseline_size_bytes'] - all_total['wop8_size_bytes']) / all_total['baseline_size_bytes']) * 100
+            
+            summary_data.extend([
+                ['', '', ''],
+                ['W-OP8 Performance:', '', ''],
+                ['Total Size (bytes)', f"{test_total['wop8_size_bytes']:,}", f"{all_total['wop8_size_bytes']:,}"],
+                ['Bits per Pixel', f"{test_wop8_bpp:.4f}", f"{all_wop8_bpp:.4f}"],
+                ['', '', ''],
+                ['Improvements:', '', ''],
+                ['Size Reduction (bytes)', f"{test_total['size_reduction_bytes']:,}", f"{all_total['size_reduction_bytes']:,}"],
+                ['Size Reduction (%)', f"{test_improvement_percentage:.4f}%", f"{all_improvement_percentage:.4f}%"],
+                ['Bits per Pixel Improvement', f"{test_bpp_improvement:.4f}", f"{all_bpp_improvement:.4f}"],
+            ])
+        else:
+            summary_data.extend([
+                ['', '', ''],
+                ['W-OP8 Performance:', '', ''],
+                ['Total Size (bytes)', 'N/A', 'N/A'],
+                ['Bits per Pixel', 'N/A', 'N/A'],
+                ['', '', ''],
+                ['Improvements:', '', ''],
+                ['Size Reduction (bytes)', 'N/A', 'N/A'],
+                ['Size Reduction (%)', 'N/A', 'N/A'],
+                ['Bits per Pixel Improvement', 'N/A', 'N/A'],
+            ])
         
         # Convert to DataFrame
         summary_df = pd.DataFrame(summary_data)
-        summary_df.columns = summary_data[0]
-        summary_df = summary_df[1:]  # Remove header row
         
-        # Read the existing workbook to preserve all sheets
+        # Write to Excel
         with pd.ExcelWriter(excel_path, mode='a', if_sheet_exists='replace') as writer:
             # Write summary sheet
             summary_df.to_excel(writer, sheet_name='Summary', index=False, header=False)
             
-            # Access the workbook and set column widths for better formatting
+            # Access the workbook and set column widths
             worksheet = writer.sheets['Summary']
-            worksheet.column_dimensions['A'].width = 30
-            worksheet.column_dimensions['B'].width = 20
-            worksheet.column_dimensions['C'].width = 20
+            worksheet.column_dimensions['A'].width = 35
+            worksheet.column_dimensions['B'].width = 25
+            worksheet.column_dimensions['C'].width = 25
             
-            # Add some basic styling to make it more readable
+            # Style the summary sheet
             from openpyxl.styles import Font, PatternFill, Alignment
-            from openpyxl.utils import get_column_letter
             
-            # Style header row
-            for col in range(1, 4):  # Columns A, B, C
-                cell = worksheet.cell(row=1, column=col)
+            # Title styling
+            worksheet.cell(row=1, column=1).font = Font(bold=True, size=14)
+            worksheet.merge_cells('A1:C1')
+            worksheet.cell(row=1, column=1).alignment = Alignment(horizontal='center')
+            
+            # Header row styling
+            for col in range(1, 4):
+                cell = worksheet.cell(row=3, column=col)
                 cell.font = Font(bold=True)
                 cell.fill = PatternFill(start_color="D3D3D3", end_color="D3D3D3", fill_type="solid")
                 cell.alignment = Alignment(horizontal='center')
             
-            # Style section headers
-            section_rows = [3, 6, 10, 14]  # Rows with section headers
+            # Section headers styling
+            section_rows = [5, 9, 13, 17]  # Rows with section headers
             for row in section_rows:
-                worksheet.cell(row=row, column=1).font = Font(bold=True)
+                if row <= len(summary_data):
+                    worksheet.cell(row=row, column=1).font = Font(bold=True)
         
         return True
     except Exception as e:
@@ -860,8 +848,8 @@ def update_with_effort_results(excel_path, effort_results):
 
 def update_summary_with_effort_results(excel_path):
     """
-    Update the summary sheet to include both testing vs. all images comparison
-    and effort level results, with metrics calculated from totals.
+    Update the summary sheet with testing vs. all images comparison.
+    This function now simply calls create_summary_sheet to maintain consistency.
     
     Args:
         excel_path (str): Path to the Excel file
@@ -870,150 +858,9 @@ def update_summary_with_effort_results(excel_path):
         bool: True if successful, False otherwise
     """
     try:
-        # Read existing Excel file
-        test_df = pd.read_excel(excel_path, sheet_name='Testing')
-        all_df = pd.read_excel(excel_path, sheet_name='All Images')
-        effort7_df = pd.read_excel(excel_path, sheet_name='Effort Level 7')
-        effort9_df = pd.read_excel(excel_path, sheet_name='Effort Level 9')
-        
-        # Get total rows for data extraction
-        test_total = test_df[test_df['image_name'] == 'TOTAL'].iloc[0]
-        all_total = all_df[all_df['image_name'] == 'TOTAL'].iloc[0]
-        effort7_total = effort7_df[effort7_df['image_name'] == 'TOTAL'].iloc[0]
-        effort9_total = effort9_df[effort9_df['image_name'] == 'TOTAL'].iloc[0]
-        
-        # Calculate BPP correctly from totals (bytes*8/pixels)
-        # For Predictor Mode 6 (isolated)
-        test_total_pixels = test_total['num_pixels']
-        test_baseline_bpp = (test_total['baseline_size_bytes'] * 8) / test_total_pixels
-        test_wop8_bpp = (test_total['wop8_size_bytes'] * 8) / test_total_pixels
-        test_bpp_improvement = test_baseline_bpp - test_wop8_bpp
-        test_improvement_percentage = ((test_total['baseline_size_bytes'] - test_total['wop8_size_bytes']) / test_total['baseline_size_bytes']) * 100
-        
-        all_total_pixels = all_total['num_pixels']
-        all_baseline_bpp = (all_total['baseline_size_bytes'] * 8) / all_total_pixels
-        all_wop8_bpp = (all_total['wop8_size_bytes'] * 8) / all_total_pixels
-        all_bpp_improvement = all_baseline_bpp - all_wop8_bpp
-        all_improvement_percentage = ((all_total['baseline_size_bytes'] - all_total['wop8_size_bytes']) / all_total['baseline_size_bytes']) * 100
-        
-        # For Effort Levels
-        effort7_total_pixels = effort7_total['num_pixels']
-        effort7_baseline_bpp = (effort7_total['baseline_size_bytes'] * 8) / effort7_total_pixels
-        effort7_wop8_bpp = (effort7_total['wop8_size_bytes'] * 8) / effort7_total_pixels
-        effort7_bpp_improvement = effort7_baseline_bpp - effort7_wop8_bpp
-        effort7_improvement_percentage = ((effort7_total['baseline_size_bytes'] - effort7_total['wop8_size_bytes']) / effort7_total['baseline_size_bytes']) * 100
-        
-        effort9_total_pixels = effort9_total['num_pixels']
-        effort9_baseline_bpp = (effort9_total['baseline_size_bytes'] * 8) / effort9_total_pixels
-        effort9_wop8_bpp = (effort9_total['wop8_size_bytes'] * 8) / effort9_total_pixels
-        effort9_bpp_improvement = effort9_baseline_bpp - effort9_wop8_bpp
-        effort9_improvement_percentage = ((effort9_total['baseline_size_bytes'] - effort9_total['wop8_size_bytes']) / effort9_total['baseline_size_bytes']) * 100
-        
-        # Create summary dataframe with both comparisons
-        summary_data = [
-            ['W-OP8 Compression Results Summary', '', '', ''],
-            ['', '', '', ''],
-            ['Part 1: Testing vs All Images (Predictor Mode 6)', '', '', ''],
-            ['Metric', 'Testing Set', 'All Images', ''],
-            ['', '', '', ''],
-            ['Dataset Statistics:', '', '', ''],
-            ['Images Count', len(test_df) - 1, len(all_df) - 1, ''],  # Subtract 1 for total row
-            ['Total Pixels', f"{test_total_pixels:,}", f"{all_total_pixels:,}", ''],
-            ['', '', '', ''],
-            ['Baseline Performance:', '', '', ''],
-            ['Total Size (bytes)', f"{test_total['baseline_size_bytes']:,}", f"{all_total['baseline_size_bytes']:,}", ''],
-            ['Bits per Pixel', f"{test_baseline_bpp:.4f}", f"{all_baseline_bpp:.4f}", ''],
-            ['', '', '', ''],
-            ['W-OP8 Performance:', '', '', ''],
-            ['Total Size (bytes)', f"{test_total['wop8_size_bytes']:,}", f"{all_total['wop8_size_bytes']:,}", ''],
-            ['Bits per Pixel', f"{test_wop8_bpp:.4f}", f"{all_wop8_bpp:.4f}", ''],
-            ['', '', '', ''],
-            ['Improvements:', '', '', ''],
-            ['Size Reduction (bytes)', f"{test_total['size_reduction_bytes']:,}", f"{all_total['size_reduction_bytes']:,}", ''],
-            ['Size Reduction (%)', f"{test_improvement_percentage:.4f}%", f"{all_improvement_percentage:.4f}%", ''],
-            ['Bits per Pixel Improvement', f"{test_bpp_improvement:.4f}", f"{all_bpp_improvement:.4f}", ''],
-            ['', '', '', ''],
-            ['Part 2: Effort Level Comparison (All Images)', '', '', ''],
-            ['Metric', 'Isolated (Predictor Mode 6)', 'Effort Level 7', 'Effort Level 9'],
-            ['', '', '', ''],
-            ['Dataset Statistics:', '', '', ''],
-            ['Images Count', len(all_df) - 1, len(effort7_df) - 1, len(effort9_df) - 1],
-            ['Total Pixels', f"{all_total_pixels:,}", f"{effort7_total_pixels:,}", f"{effort9_total_pixels:,}"],
-            ['', '', '', ''],
-            ['Baseline Performance:', '', '', ''],
-            ['Total Size (bytes)', f"{all_total['baseline_size_bytes']:,}", f"{effort7_total['baseline_size_bytes']:,}", f"{effort9_total['baseline_size_bytes']:,}"],
-            ['Bits per Pixel', f"{all_baseline_bpp:.4f}", f"{effort7_baseline_bpp:.4f}", f"{effort9_baseline_bpp:.4f}"],
-            ['', '', '', ''],
-            ['W-OP8 Performance:', '', '', ''],
-            ['Total Size (bytes)', f"{all_total['wop8_size_bytes']:,}", f"{effort7_total['wop8_size_bytes']:,}", f"{effort9_total['wop8_size_bytes']:,}"],
-            ['Bits per Pixel', f"{all_wop8_bpp:.4f}", f"{effort7_wop8_bpp:.4f}", f"{effort9_wop8_bpp:.4f}"],
-            ['', '', '', ''],
-            ['Improvements:', '', '', ''],
-            ['Size Reduction (bytes)', f"{all_total['size_reduction_bytes']:,}", f"{effort7_total['size_reduction_bytes']:,}", f"{effort9_total['size_reduction_bytes']:,}"],
-            ['Size Reduction (%)', f"{all_improvement_percentage:.4f}%", f"{effort7_improvement_percentage:.4f}%", f"{effort9_improvement_percentage:.4f}%"],
-            ['Bits per Pixel Improvement', f"{all_bpp_improvement:.4f}", f"{effort7_bpp_improvement:.4f}", f"{effort9_bpp_improvement:.4f}"],
-        ]
-        
-        # Convert to DataFrame
-        summary_df = pd.DataFrame(summary_data)
-        
-        # Write to Excel
-        with pd.ExcelWriter(excel_path, mode='a', if_sheet_exists='replace') as writer:
-            # Write summary sheet
-            summary_df.to_excel(writer, sheet_name='Summary', index=False, header=False)
-            
-            # Access the workbook and set column widths
-            worksheet = writer.sheets['Summary']
-            worksheet.column_dimensions['A'].width = 30
-            worksheet.column_dimensions['B'].width = 25
-            worksheet.column_dimensions['C'].width = 25
-            worksheet.column_dimensions['D'].width = 25
-            
-            # Style header row and section titles
-            from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
-            
-            # Title styling
-            worksheet.cell(row=1, column=1).font = Font(bold=True, size=14)
-            worksheet.merge_cells('A1:D1')
-            worksheet.cell(row=1, column=1).alignment = Alignment(horizontal='center')
-            
-            # Part 1 title
-            worksheet.cell(row=3, column=1).font = Font(bold=True, size=12)
-            worksheet.merge_cells('A3:D3')
-            
-            # Part 1 header row
-            for col in range(1, 4):
-                cell = worksheet.cell(row=4, column=col)
-                cell.font = Font(bold=True)
-                cell.fill = PatternFill(start_color="D3D3D3", end_color="D3D3D3", fill_type="solid")
-                cell.alignment = Alignment(horizontal='center')
-            
-            # Part 2 title
-            worksheet.cell(row=23, column=1).font = Font(bold=True, size=12)
-            worksheet.merge_cells('A23:D23')
-            
-            # Part 2 header row (this is the important fix)
-            for col in range(1, 5):
-                cell = worksheet.cell(row=24, column=col)
-                cell.font = Font(bold=True)
-                cell.fill = PatternFill(start_color="D3D3D3", end_color="D3D3D3", fill_type="solid")
-                cell.alignment = Alignment(horizontal='center')
-            
-            # Style section headers for both parts
-            section_rows_part1 = [6, 10, 14, 18]
-            section_rows_part2 = [27, 31, 35, 39]
-            
-            for row in section_rows_part1 + section_rows_part2:
-                worksheet.cell(row=row, column=1).font = Font(bold=True)
-            
-  
-            
-            for row in range(1, 43):  # Adjust based on actual content
-                for col in range(1, 5):
-                    cell = worksheet.cell(row=row, column=col)
-                    # cell.border = thin_border
-        
-        return True
+        # Simply call the create_summary_sheet function which now only handles
+        # testing vs all images comparison
+        return create_summary_sheet(excel_path)
     except Exception as e:
-        print(f"Error updating summary with effort results: {e}")
+        print(f"Error updating summary: {e}")
         return False

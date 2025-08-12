@@ -19,7 +19,7 @@ from src.compression.processor_wop8 import apply_wop8_to_all_images
 
 # Import baseline compression functionality
 from src.compression.baseline import BaselineCompression
-from src.reporting.spreadsheet import update_spreadsheet_with_baseline, update_with_effort_results
+from src.reporting.spreadsheet import update_spreadsheet_with_baseline, update_with_effort_results, create_summary_sheet
 
 # Import GA optimization functionality
 from src.genetic_algorithm.optimizer import optimize_weights
@@ -140,7 +140,7 @@ def process_dataset(dataset_name, train_ratio=0.1, max_train_images=10, seed=42,
     
     # Step 5: Run ALL baseline compressions at once
     if progress_callback:
-        progress_callback("baseline", "Running baseline compression at all effort levels...")
+        progress_callback("baseline", "Running baseline compression ...")
  
     print("Setting up baseline compression...")
     compressor = BaselineCompression()
@@ -156,22 +156,30 @@ def process_dataset(dataset_name, train_ratio=0.1, max_train_images=10, seed=42,
     print("Compressing testing set with baseline...")
     test_results = compressor.process_dataset(test_paths, run_name)
 
-    # Compress ALL images at effort level 7 (no predictor mode)
-    print("Compressing all images with baseline effort 7...")
-    all_paths = train_paths + test_paths
-    baseline_effort7 = compressor.process_dataset_with_effort(all_paths, run_name, effort=7)
+    # # Compress ALL images at effort level 7 (no predictor mode)
+    # print("Compressing all images with baseline effort 7...")
+    # all_paths = train_paths + test_paths
+    # baseline_effort7 = compressor.process_dataset_with_effort(all_paths, run_name, effort=7)
 
-    # Compress ALL images at effort level 9 (no predictor mode)
-    print("Compressing all images with baseline effort 9...")
-    baseline_effort9 = compressor.process_dataset_with_effort(all_paths, run_name, effort=9)
+    # # Compress ALL images at effort level 9 (no predictor mode)
+    # print("Compressing all images with baseline effort 9...")
+    # baseline_effort9 = compressor.process_dataset_with_effort(all_paths, run_name, effort=9)
 
     # Update spreadsheet with ALL baseline results
     print("Updating spreadsheet with baseline results...")
     update_spreadsheet_with_baseline(excel_path, train_results, test_results)
-    update_with_effort_results(excel_path, {
-        'effort7': {'baseline': baseline_effort7, 'wop8': {}},
-        'effort9': {'baseline': baseline_effort9, 'wop8': {}}
-    })
+    
+    # Create summary sheet (with baseline results only initially)
+    print("Creating summary sheet...")
+    summary_success = create_summary_sheet(excel_path)
+    if summary_success:
+        print("Summary sheet created successfully")
+    else:
+        print("Failed to create summary sheet")
+    # update_with_effort_results(excel_path, {
+    #     'effort7': {'baseline': baseline_effort7, 'wop8': {}},
+    #     'effort9': {'baseline': baseline_effort9, 'wop8': {}}
+    # })
     
     # Step 6: Run GA optimization (if requested)
     ga_results = None
@@ -200,7 +208,7 @@ def process_dataset(dataset_name, train_ratio=0.1, max_train_images=10, seed=42,
         
         # Step 7: Apply W-OP8 with best weights to all images
         if progress_callback:
-            progress_callback("wop8", "Applying W-OP8 compression at different effort levels to all images...")
+            progress_callback("wop8", "Applying W-OP8 compression to all images...")
         wop8_results = apply_wop8_to_all_images(
             run_name=run_name,
             train_paths=train_paths,

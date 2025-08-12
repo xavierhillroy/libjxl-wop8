@@ -8,7 +8,7 @@ from config import STATS_DIR
 from config import CONTEXT_PREDICT_PATH, BUILD_DIR, COMPRESSED_DIR
 
 from src.compression.wop8 import WOP8Compression
-from src.reporting.spreadsheet import update_with_wop8_results
+from src.reporting.spreadsheet import update_with_wop8_results, create_summary_sheet
 
 
 def apply_wop8_to_testing(run_name, test_paths, excel_path, best_weights):
@@ -58,6 +58,14 @@ def apply_wop8_to_testing(run_name, test_paths, excel_path, best_weights):
     
     if update_success:
         print(f"Spreadsheet updated with W-OP8 results at: {excel_path}")
+        
+        # Create summary sheet
+        print("Creating summary sheet...")
+        summary_success = create_summary_sheet(excel_path)
+        if summary_success:
+            print("Summary sheet created successfully")
+        else:
+            print("Failed to create summary sheet")
     else:
         print("Failed to update spreadsheet with W-OP8 results")
     
@@ -239,16 +247,24 @@ def apply_wop8_to_all_images(run_name, train_paths, test_paths, excel_path, best
         print("Failed to update spreadsheet with W-OP8 results")
         return None
     
-    # Step 2: Compress all images at different effort levels (for Effort Level sheets)
-    print("\nRunning effort level comparisons...")
-    effort_results = apply_different_effort_levels(run_name, all_paths, excel_path, best_weights)
-    
-    if effort_results:
-        print("Effort level comparisons completed and added to spreadsheet")
+    # Create summary sheet
+    print("Creating summary sheet...")
+    summary_success = create_summary_sheet(excel_path)
+    if summary_success:
+        print("Summary sheet created successfully")
     else:
-        print("Failed to complete effort level comparisons")
+        print("Failed to create summary sheet")
     
-    print(f"Spreadsheet updated with W-OP8 results at: {excel_path}")
+    # # Step 2: Compress all images at different effort levels (for Effort Level sheets)
+    # print("\nRunning effort level comparisons...")
+    # effort_results = apply_different_effort_levels(run_name, all_paths, excel_path, best_weights)
+    
+    # if effort_results:
+    #     print("Effort level comparisons completed and added to spreadsheet")
+    # else:
+    #     print("Failed to complete effort level comparisons")
+    
+    # print(f"Spreadsheet updated with W-OP8 results at: {excel_path}")
     
     # Save summary to stats file
     results_path = os.path.join(STATS_DIR, f"{run_name}_wop8_results.json")
