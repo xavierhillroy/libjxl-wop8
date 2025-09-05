@@ -75,7 +75,7 @@ class WOP8Interface:
         menu_content = """
 [bold blue]Welcome to W-OP8: Weight-Optimized JPEG XL Compression[/bold blue]
 
-[link=https://arxiv.org/abs/your-paper-id]📄 Read our paper[/link]
+[link=coming soon]📄 Read our paper (coming soon)[/link]
 
 [cyan]1.[/cyan] Start New Analysis
 [cyan]2.[/cyan] View Instructions  

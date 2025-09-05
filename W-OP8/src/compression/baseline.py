@@ -85,7 +85,7 @@ class BaselineCompression:
                 output_path,
                 "--distance=0",
                 "--modular_predictor=6", 
-                "--effort=7"
+                "--effort=9"
             ]
             
             result = subprocess.run(
